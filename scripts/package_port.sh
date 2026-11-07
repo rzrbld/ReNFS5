@@ -80,7 +80,7 @@ mkdir -p "$payload"/{saves,configs,source,licenses}
 # ---- payload binaries and scripts ---------------------------------------
 install -m 0755 "$binary" "$payload/nfs5.aarch64"
 install -m 0755 "$launcher" "$payload/nfs5-launcher.aarch64"
-for name in nfs5-env.sh muos-session.sh cpu-session.sh; do
+for name in nfs5-env.sh cpu-session.sh; do
     install -m 0755 "packaging/$name" "$payload/$name"
 done
 install -m 0644 packaging/README.md "$payload/README.md"
@@ -202,7 +202,7 @@ def elf_ok(path):
     return data[:6] == b"\x7fELF\x02\x01" and int.from_bytes(data[18:20], "little") == 183
 for name in ("NFS5.sh", "port.json", "README.md", "gameinfo.xml", "screenshot.png"):
     need((ports / name).is_file(), f"missing top-level {name}")
-for name in ("nfs5.aarch64", "nfs5-launcher.aarch64", "nfs5-env.sh", "muos-session.sh",
+for name in ("nfs5.aarch64", "nfs5-launcher.aarch64", "nfs5-env.sh",
              "cpu-session.sh", "README.md", "port.json", "gameinfo.xml", "screenshot.png",
              "BUILD.json", "MANIFEST.json", "LICENSE", "configs/launcher.cfg", "saves/README.txt",
              "KNOWN_ISSUES.md", "CONTROLS.md", "MOVIES.md",
@@ -251,7 +251,7 @@ for path in payload.rglob("*"):
         errors.append(f"python file in package: {rel}")
     if "translated/" in rel or rel.startswith("build/"):
         errors.append(f"package contains build/generated content: {rel}")
-for name in ("NFS5.sh", "nfs5/nfs5-env.sh", "nfs5/muos-session.sh", "nfs5/cpu-session.sh"):
+for name in ("NFS5.sh", "nfs5/nfs5-env.sh", "nfs5/cpu-session.sh"):
     subprocess.run(["bash", "-n", str(ports / name)], check=True)
     need(b"\r\n" not in (ports / name).read_bytes(), f"CRLF in {name}")
 manifest = json.loads((payload / "MANIFEST.json").read_text())

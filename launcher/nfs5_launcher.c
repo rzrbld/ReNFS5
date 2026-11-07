@@ -1120,8 +1120,8 @@ sdl_ready:;
     uint32_t flags = (screenshot || autotest || getenv("NFS5_LAUNCHER_WINDOWED"))
                          ? SDL_WINDOW_SHOWN
                          : (SDL_WINDOW_FULLSCREEN_DESKTOP | SDL_WINDOW_SHOWN);
-    SDL_Window *win = SDL_CreateWindow("NFS5", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, W, H, flags);
-    if (!win) win = SDL_CreateWindow("NFS5", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, W, H, SDL_WINDOW_SHOWN);
+    SDL_Window *win = SDL_CreateWindow("ReNFS5", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, W, H, flags);
+    if (!win) win = SDL_CreateWindow("ReNFS5", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, W, H, SDL_WINDOW_SHOWN);
     SDL_Renderer *ren = win ? SDL_CreateRenderer(win, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC) : NULL;
     if (!ren && win) ren = SDL_CreateRenderer(win, -1, SDL_RENDERER_SOFTWARE);
     if (!ren) {

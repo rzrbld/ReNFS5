@@ -342,6 +342,16 @@ static void present(void) {
     }
     if (g_stretch) { g_dst.x = 0; g_dst.y = 0; g_dst.w = ww; g_dst.h = wh; }
     else g_dst.x = (ww - g_dst.w) / 2, g_dst.y = (wh - g_dst.h) / 2;
+    {
+        static int logged;
+        int winw = 0, winh = 0;
+        if (!logged) {
+            logged = 1;
+            SDL_GetWindowSize(g_win, &winw, &winh);
+            fprintf(stderr, "[screen] window %dx%d, output %dx%d, %dx%d image at %d,%d size %dx%d\n",
+                    winw, winh, ww, wh, w, h, g_dst.x, g_dst.y, g_dst.w, g_dst.h);
+        }
+    }
     SDL_SetRenderDrawColor(g_ren, 0, 0, 0, 255);
     SDL_RenderClear(g_ren);
     if (g_bars && (g_dst.w < ww || g_dst.h < wh)) {     /* the bars: the picture, tiny then stretched, dark */

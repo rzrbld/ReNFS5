@@ -390,10 +390,16 @@ int main(int argc, char **argv) {
         const char *requested = getenv("NFS5_HEADLESS");
         int headless = requested && *requested ? strcmp(requested, "0") != 0
             : (drv && (!strcmp(drv, "offscreen") || !strcmp(drv, "dummy")));
-        int fullscreen = !getenv("DISPLAY") && !getenv("WAYLAND_DISPLAY");
+        /* NFS5_FULLSCREEN=1 (set by the packaged nfs5-env.sh): handheld
+         * firmwares may run a compositor (e.g. Weston on Anbernic's stock
+         * RK3566/RK3568 Linux), where a plain window gets panels and
+         * decorations and no longer fits the screen. Without it, a desktop
+         * session (X11/Wayland) gets a window, anything else fullscreen. */
+        const char *fs = getenv("NFS5_FULLSCREEN");
+        int fullscreen = fs && *fs ? strcmp(fs, "0") != 0 : !getenv("DISPLAY") && !getenv("WAYLAND_DISPLAY");
         fprintf(stderr, "[nfs5] display mode=%s fullscreen=%d SDL driver=%s\n",
                 headless ? "headless" : "visible", fullscreen, drv ? drv : "auto");
-        if (hle_screen_open("Need for Speed: Porsche Unleashed", fullscreen, headless) != 0) {
+        if (hle_screen_open("ReNFS5", fullscreen, headless) != 0) {
             fprintf(stderr, "[nfs5] cannot open game display: %s\n", SDL_GetError());
             return 1;
         }

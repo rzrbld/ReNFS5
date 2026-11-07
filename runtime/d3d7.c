@@ -1071,6 +1071,8 @@ int d3d7_flip_gpu(uint32_t front, uint32_t back) {
 int d3d7_present_gpu(int w, int h, int stretch, int fps) {
     if (!g_gpu_front) return 0;
     if (nfs5_acct_enter_p) nfs5_acct_enter_p(10);
+    static int logged;
+    if (!logged) { logged = 1; fprintf(stderr, "[screen] GPU present into %dx%d (stretch=%d)\n", w, h, stretch); }
     int shown = r_present_front(w,h,stretch,fps);
     if (nfs5_acct_leave_p) nfs5_acct_leave_p(10);
     return shown;

@@ -52,7 +52,6 @@
 !/packaging/cpu-session.sh
 !/packaging/gameinfo.xml
 !/packaging/licenses/FFmpeg-LGPL.txt
-!/packaging/muos-session.sh
 !/packaging/nfs5-env.sh
 !/packaging/port.json
 !/packaging/source/PLACE-YOUR-GAME-FILES-HERE.txt

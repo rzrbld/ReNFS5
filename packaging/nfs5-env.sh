@@ -37,6 +37,12 @@ v=$(nfs5_setting fps_counter)
 case "$v" in
     0|1) export NFS5_FPS_OVERLAY=${NFS5_FPS_OVERLAY:-$v} ;;
 esac
+# Always fullscreen on a handheld, also under a compositor (Weston etc.).
+export NFS5_FULLSCREEN=${NFS5_FULLSCREEN:-1}
+# Under a compositor the game window can lose keyboard focus (paused menu,
+# gptokeyb's virtual keyboard, the movie window); SDL then drops gamepad
+# input. The game is the only thing on screen, so always take it.
+export SDL_JOYSTICK_ALLOW_BACKGROUND_EVENTS=${SDL_JOYSTICK_ALLOW_BACKGROUND_EVENTS:-1}
 # (the old launcher DETAIL setting is ignored: rendering always uses the
 # game's own filtering; NFS5_DETAIL=low|high remains a developer switch)
 v=$(nfs5_setting movies)
