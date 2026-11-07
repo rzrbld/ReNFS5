@@ -9,8 +9,11 @@ view) dip into the high 20s.
   Other game revisions are unverified.
 - CD images containing only a Windows installer need PC-side installation first.
 - The FPS cap is a pacing target, not a guarantee that every scene reaches it.
-- Detail changes presentation filtering; it does not replace every original
-  in-game graphics option. Higher resolutions are unverified on handhelds.
+- Detail: LOW uses sharp nearest-pixel textures, MEDIUM the game's own
+  filtering, HIGH adds mipmapped trilinear/anisotropic textures and 4x
+  anti-aliasing (costs GPU time; distant see-through details such as fences
+  can look thinner). The game's in-game graphics options still apply.
+  Higher resolutions are unverified on handhelds.
 - Some original keyboard graphics/HUD shortcuts are not implemented.
 
 Back up saves/ and configs/ before upgrading. For errors, retain log.txt and

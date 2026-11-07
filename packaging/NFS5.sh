@@ -174,5 +174,10 @@ nfs5_game_started=1
 nfs5_game_pid=$!
 wait "$nfs5_game_pid"
 rc=$?
+if [ "$rc" -gt 128 ]; then
+    echo "[nfs5] game exited with signal $((rc - 128)) ($(kill -l $((rc - 128)) 2>/dev/null || echo ?))" >&2
+else
+    echo "[nfs5] game exited rc=$rc" >&2
+fi
 nfs5_game_pid=
 exit "$rc"

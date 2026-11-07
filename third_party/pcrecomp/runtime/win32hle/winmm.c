@@ -201,6 +201,27 @@ static int mmt_claim_slot(void) {
     }
     return -1;
 }
+/* Recent timeSetEvent results, for diagnostics (hle_winmm_dump_recent). */
+static struct { uint32_t seq, delay, proc, flags, ret, slot; unsigned long th; } g_tse_ring[16];
+static uint32_t g_tse_seq;
+static void tse_note(uint32_t delay, uint32_t proc, uint32_t flags, uint32_t ret, int slot) {
+    uint32_t n = __atomic_fetch_add(&g_tse_seq, 1, __ATOMIC_RELAXED);
+    g_tse_ring[n & 15].seq = n;
+    g_tse_ring[n & 15].delay = delay; g_tse_ring[n & 15].proc = proc; g_tse_ring[n & 15].flags = flags;
+    g_tse_ring[n & 15].ret = ret; g_tse_ring[n & 15].slot = (uint32_t)slot;
+    g_tse_ring[n & 15].th = (unsigned long)pthread_self();
+}
+void hle_winmm_dump_recent(void) {
+    uint32_t n = __atomic_load_n(&g_tse_seq, __ATOMIC_RELAXED);
+    for (uint32_t k = n > 16 ? n - 16 : 0; k < n; k++) {
+        typeof(g_tse_ring[0]) *e = &g_tse_ring[k & 15];
+        fprintf(stderr, "[winmm] recent timeSetEvent #%u thread=%lx delay=%u proc=%#x flags=%#x -> %u (slot %d)\n",
+                e->seq, e->th, e->delay, e->proc, e->flags, e->ret, (int)e->slot);
+    }
+    int live = 0;
+    for (int i = 0; i < MAX_MMTIMERS; i++) live += __atomic_load_n(&g_mmt[i].state, __ATOMIC_RELAXED) != 0;
+    fprintf(stderr, "[winmm] live timer slots %d, next id %u\n", live, g_mmt_next);
+}
 static void m_timeSetEvent(void) {             /* (delay, resolution, proc, user, flags) */
     uint32_t delay = A32(0), proc = A32(2), user = A32(3), flags = A32(4);
     int last_err = 0, i = -1;
@@ -213,7 +234,12 @@ static void m_timeSetEvent(void) {             /* (delay, resolution, proc, user
         i = mmt_claim_slot();
         if (i < 0) { last_err = -1; continue; }
         g_mmt[i].killed = 0, g_mmt[i].inflight = 0;
-        g_mmt[i].id = __atomic_fetch_add(&g_mmt_next, 1, __ATOMIC_RELAXED);
+        /* The id is returned from this local, never re-read from the slot: a
+         * one-shot timer can fire, run and free its slot (id = 0) before this
+         * thread gets the machine back after pthread_create, and returning 0
+         * makes NFS5 stop its frame clock ("framerate - TIMERHZ NOT SET!"). */
+        const uint32_t id = __atomic_fetch_add(&g_mmt_next, 1, __ATOMIC_RELAXED);
+        g_mmt[i].id = id;
         g_mmt[i].delay = delay, g_mmt[i].proc = proc;
         g_mmt[i].user = user, g_mmt[i].flags = flags;
         /* NFS5 reschedules its one-shot frame clock ~128 times a second;
@@ -231,12 +257,14 @@ static void m_timeSetEvent(void) {             /* (delay, resolution, proc, user
         if (attempt)
             fprintf(stderr, "[winmm] timeSetEvent(proc=%#x) armed after %d retries (%s)\n", proc, attempt,
                     last_err < 0 ? "all timer slots busy" : strerror(last_err));
+        tse_note(delay, proc, flags, id, i);
         atr("timeSetEvent(delay=%ums, res=%ums, proc=%#x, user=%#x, flags=%#x%s) -> timer %u",
-            delay, A32(1), proc, user, flags, (flags & TIME_PERIODIC) ? " PERIODIC" : " ONESHOT", g_mmt[i].id);
-        RET(g_mmt[i].id, 5);
+            delay, A32(1), proc, user, flags, (flags & TIME_PERIODIC) ? " PERIODIC" : " ONESHOT", id);
+        RET(id, 5);
     }
     fprintf(stderr, "[winmm] timeSetEvent(proc=%#x) FAILED: %s\n", proc,
             last_err < 0 ? "more than " "32" " timers live" : strerror(last_err));
+    tse_note(delay, proc, flags, 0, -1);
     RET(0, 5);
 }
 static void m_timeKillEvent(void) {

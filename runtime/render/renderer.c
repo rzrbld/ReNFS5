@@ -277,6 +277,44 @@ static void destroy(Target *t) {
     memset(t, 0, sizeof *t);
 }
 /* Anything outside the command executor that touches GL state calls this. */
+/* NFS5_DETAIL (launcher DETAIL):
+ *   low    nearest texture filtering everywhere (crisp, cheapest)
+ *   medium the filtering the game asks for (default)
+ *   high   mipmapped trilinear + 4x anisotropic textures and 4x MSAA render
+ *          targets (GL_EXT_multisampled_render_to_texture: on tile-based GPUs
+ *          the samples resolve in tile memory, so the cost stays modest).
+ * The game's own mip-chain build is disabled (dx7z override), so mip levels
+ * are generated here for power-of-two textures that are uploaded rarely. */
+enum { DETAIL_LOW, DETAIL_MEDIUM, DETAIL_HIGH };
+static int g_detail = -1;
+static int detail_level(void) {
+    if (g_detail < 0) {
+        const char *d = getenv("NFS5_DETAIL");
+        g_detail = (d && !strcmp(d, "low")) ? DETAIL_LOW : (d && !strcmp(d, "high")) ? DETAIL_HIGH : DETAIL_MEDIUM;
+    }
+    return g_detail;
+}
+typedef void (GL_APIENTRYP PFN_FBTEX2DMS)(GLenum, GLenum, GLenum, GLuint, GLint, GLsizei);
+typedef void (GL_APIENTRYP PFN_RBSTORAGEMS)(GLenum, GLsizei, GLenum, GLsizei, GLsizei);
+static PFN_FBTEX2DMS p_fbtex2dms;
+static PFN_RBSTORAGEMS p_rbstoragems;
+static int g_msaa = -1;          /* samples for render targets, 0 = off */
+static int g_aniso;              /* GL_EXT_texture_filter_anisotropic present */
+static void detail_caps(void) {  /* on the GL thread, context current */
+    if (g_msaa >= 0) return;
+    g_msaa = 0;
+    const char *ext = (const char *)glGetString(GL_EXTENSIONS);
+    g_aniso = ext && strstr(ext, "GL_EXT_texture_filter_anisotropic") != NULL;
+    if (detail_level() == DETAIL_HIGH && ext && strstr(ext, "GL_EXT_multisampled_render_to_texture")) {
+        p_fbtex2dms = (PFN_FBTEX2DMS)gles_ctx_proc("glFramebufferTexture2DMultisampleEXT");
+        p_rbstoragems = (PFN_RBSTORAGEMS)gles_ctx_proc("glRenderbufferStorageMultisampleEXT");
+        if (p_fbtex2dms && p_rbstoragems) g_msaa = 4;
+    }
+    fprintf(stderr, "[dx7] detail=%s msaa=%dx anisotropic=%s\n",
+            detail_level() == DETAIL_LOW ? "low" : detail_level() == DETAIL_HIGH ? "high" : "medium",
+            g_msaa, g_aniso ? "yes" : "no");
+}
+
 static void gl_state_unknown(void) {
     gpu.raster.valid = 0;
     gpu.bound[0] = gpu.bound[1] = (GLuint)-1;
@@ -299,13 +337,27 @@ static int target(Target *t, int w, int h, int packed) {
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    detail_caps();
     glGenFramebuffers(1, &t->fbo);
     glBindFramebuffer(GL_FRAMEBUFFER, t->fbo);
-    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, t->color, 0);
     glGenRenderbuffers(1, &t->depth);
     glBindRenderbuffer(GL_RENDERBUFFER, t->depth);
-    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT16, w, h);
+    int ms = g_msaa;
+    if (ms) {
+        p_fbtex2dms(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, t->color, 0, ms);
+        p_rbstoragems(GL_RENDERBUFFER, ms, GL_DEPTH_COMPONENT16, w, h);
+    } else {
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, t->color, 0);
+        glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT16, w, h);
+    }
     glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, t->depth);
+    if (ms && glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+        fprintf(stderr, "[dx7] MSAA render target incomplete; anti-aliasing off\n");
+        g_msaa = 0;                                 /* fall back for good */
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, t->color, 0);
+        glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT16, w, h);
+        glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, t->depth);
+    }
     if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
         destroy(t);
         return error("incomplete GPU render target");
@@ -560,11 +612,16 @@ static void bind_unit(int k, GLuint tex, const RState *s, int levels) {
         gpu.stats.tex_binds++;
     }
     int point = s->min_filter[k] == 1, mip = s->mip_filter[k];
+    int detail = detail_level();
     GLint min = point ? GL_NEAREST : GL_LINEAR;
-    if (mip && levels > 1)
+    if (detail == DETAIL_HIGH && !point && levels > 1)
+        min = GL_LINEAR_MIPMAP_LINEAR;              /* the game had mip chains on real hardware */
+    else if (mip && levels > 1)
         min = point ? (mip == 2 ? GL_NEAREST_MIPMAP_LINEAR : GL_NEAREST_MIPMAP_NEAREST)
                     : (mip == 2 ? GL_LINEAR_MIPMAP_LINEAR : GL_LINEAR_MIPMAP_NEAREST);
     GLint mag = s->mag_filter[k] == 1 ? GL_NEAREST : GL_LINEAR;
+    if (detail == DETAIL_LOW)
+        min = mag = GL_NEAREST;
     GLint ws = address(s->address[k][0]), wt = address(s->address[k][1]);
     TexParams *tp = tex_params_slot(tex);
     if (tp && tp->min == min && tp->mag == mag && tp->ws == ws && tp->wt == wt)
@@ -991,6 +1048,9 @@ static void run_op(Batch *b, Op *o) {
         glBindTexture(GL_TEXTURE_2D, t);
         gpu.bound[0] = t;
         glGenerateMipmap(GL_TEXTURE_2D);
+        detail_caps();
+        if (g_aniso)
+            glTexParameterf(GL_TEXTURE_2D, 0x84FE /* GL_TEXTURE_MAX_ANISOTROPY_EXT */, 4.0f);
         break;
     }
     case OP_TARGET_LOAD:
@@ -1559,6 +1619,9 @@ void r_tex_upload(RTexture *t, const uint8_t *p, int w, int h) {
     t->w = w;
     t->h = h;
     t->levels = 1;
+    /* high detail: mip chain for textures that are not re-uploaded all the time */
+    if (detail_level() == DETAIL_HIGH && ++t->uploads <= 3 && w >= 8 && h >= 8)
+        r_tex_mipmap(t);
 }
 void r_tex_mipmap(RTexture *t) {
     if (!t || !t->gl || t->w <= 0 || t->h <= 0 || (t->w & (t->w - 1)) || (t->h & (t->h - 1)))

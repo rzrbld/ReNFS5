@@ -101,6 +101,7 @@ typedef struct {
     int w, h;
     int has_alpha;
     int levels;                      /* mip levels present in `gl` */
+    int uploads;                     /* NFS5_DETAIL=high: mipmapped while uploaded rarely */
 } RTexture;
 
 /* Aggregate counters, reset by r_take_stats(). */

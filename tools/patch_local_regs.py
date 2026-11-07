@@ -168,6 +168,10 @@ def call_flags(files):
 # body is renamed <name>_lifted and the wrapper keeps the original name.
 WRAPPED = {
     "recomp_nfs_porsche_00565030": "runtime/nfs5_timer_init.c (TIMER_init retry)",
+    "recomp_nfs_porsche_00565270": "runtime/nfs5_timer_init.c (timer thread: running count)",
+    "recomp_nfs_porsche_00564FA0": "runtime/nfs5_timer_init.c (timer shutdown: wait for the thread)",
+    "recomp_nfs_porsche_00539F50": "runtime/nfs5_matrix.c (4x4 batch transform)",
+    "recomp_nfs_porsche_0053A6C0": "runtime/nfs5_matrix.c (cofactor determinant)",
 }
 
 
