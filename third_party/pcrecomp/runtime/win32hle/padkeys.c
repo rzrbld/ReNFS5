@@ -283,9 +283,23 @@ static int act_down(SDL_GameController *c, int a) {
  * draws it (hle_keypad_state). Cells 0-11 are the 3x4 grid, 12 is OK. */
 static volatile int g_kp_open, g_kp_sel;
 int hle_keypad_state(int *sel) { if (sel) *sel = g_kp_sel; return g_kp_open; }
+/* A key goes through DirectInput too (the game's text fields read its
+ * keyboard) and is held for a moment: DirectInput reports changes between
+ * the game's polls, so a press and release at once would never show. */
+extern void nfs5_dinput_inject_key(uint32_t vk, int down);
+static uint32_t g_kp_held_vk, g_kp_release_at;
+static void kp_release_pending(int force) {
+    if (g_kp_held_vk && (force || (int32_t)(SDL_GetTicks() - g_kp_release_at) >= 0)) {
+        nfs5_dinput_inject_key(g_kp_held_vk, 0);
+        g_kp_held_vk = 0;
+    }
+}
 static void kp_type(uint32_t vk, uint32_t scan) {
-    hle_input_key(1, vk, scan);
-    hle_input_key(0, vk, scan);
+    (void)scan;
+    kp_release_pending(1);
+    nfs5_dinput_inject_key(vk, 1);
+    g_kp_held_vk = vk;
+    g_kp_release_at = SDL_GetTicks() + 80;
 }
 static void kp_press(int cell) {
     static const struct { uint32_t vk, scan; } k[12] = {
@@ -298,6 +312,7 @@ static void kp_press(int cell) {
 static int keypad_poll(SDL_GameController *c) {
     static uint8_t prev[SDL_CONTROLLER_BUTTON_MAX];
     uint8_t now[SDL_CONTROLLER_BUTTON_MAX];
+    kp_release_pending(0);
     for (int b = 0; b < SDL_CONTROLLER_BUTTON_MAX; b++)
         now[b] = SDL_GameControllerGetButton(c, (SDL_GameControllerButton)b) != 0;
 #define KP_EDGE(b) (now[b] && !prev[b])

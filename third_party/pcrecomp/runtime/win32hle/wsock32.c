@@ -64,6 +64,7 @@ static uint32_t wsa_errno(int e) {
     default: return 10000u + (uint32_t)e;
     }
 }
+static int nettrace(void);    /* HLE_NETTRACE=1: log the game's socket calls */
 static int fd_of(uint32_t s) { return s >= SOCK_BASE && s < SOCK_BASE + 0x10000u ? (int)(s - SOCK_BASE) : -1; }
 static uint8_t g_ipx[0x10000 / 8];                       /* which descriptors are IPX sockets */
 static int is_ipx(int fd) { return fd >= 0 && fd < 0x10000 && (g_ipx[fd >> 3] >> (fd & 7) & 1); }
@@ -91,11 +92,30 @@ static void ipx_to_host(const uint8_t *g, struct sockaddr_in *h, int any) {
     memcpy(&h->sin_port, g + 12, 2);
     if (!any) memcpy(&h->sin_addr, g + 6, 4);
 }
+/* This host's IPv4 address on the network (the first up, non-loopback
+ * interface), network order; loopback when there is none. */
+static uint32_t local_ipv4(void) {
+    uint32_t a = htonl(INADDR_LOOPBACK);
+    struct ifaddrs *ifs = NULL;
+    if (getifaddrs(&ifs) == 0) {
+        for (struct ifaddrs *i = ifs; i; i = i->ifa_next)
+            if (i->ifa_addr && i->ifa_addr->sa_family == AF_INET && !(i->ifa_flags & IFF_LOOPBACK) &&
+                (i->ifa_flags & IFF_UP)) {
+                a = ((struct sockaddr_in *)i->ifa_addr)->sin_addr.s_addr;
+                break;
+            }
+        freeifaddrs(ifs);
+    }
+    return a;
+}
 static void ipx_to_guest(const struct sockaddr_in *h, uint8_t *g, int self) {
     memset(g, 0, 14);
     g[0] = AF_IPX_WIN;
-    if (self) g[11] = 1;                                 /* our own node: 00:00:00:00:00:01 */
-    else memcpy(g + 6, &h->sin_addr, 4);                 /* a sender's: its address, then 00 00 */
+    /* a node is the IPv4 address, then 00 00 (IPXEmu), our own too: games put
+     * their own address into packets (NFS5's LAN host advertises it), and a
+     * placeholder made the other side answer 0.0.0.0 */
+    if (self) { uint32_t me = local_ipv4(); memcpy(g + 6, &me, 4); }
+    else memcpy(g + 6, &h->sin_addr, 4);
     memcpy(g + 12, &h->sin_port, 2);
 }
 
@@ -130,6 +150,7 @@ static void w_socket(void) {                             /* (af, type, protocol)
     if (fd < 0 || fd >= 0x10000) { if (fd >= 0) close(fd); g_wsa_error = wsa_errno(errno); RET(INVALID_SOCKET, 3); }
     if (ipx) g_ipx[fd >> 3] |= (uint8_t)(1 << (fd & 7));
     else g_ipx[fd >> 3] &= (uint8_t)~(1 << (fd & 7));
+    if (nettrace()) fprintf(stderr, "[net] socket(af %d, type %d, proto %d) -> fd %d%s\n", af, type, proto, fd, ipx ? " (IPX over UDP)" : "");
     RET(SOCK_BASE + (uint32_t)fd, 3);
 }
 static void w_closesocket(void) {
@@ -143,7 +164,9 @@ static void w_bind(void) {                               /* (s, addr, len) */
     int fd = fd_of(A32(0));
     if (is_ipx(fd)) ipx_to_host((const uint8_t *)APTR(1), &a, 1);   /* any address, the socket's port */
     else to_host((const uint8_t *)APTR(1), &a);
-    if (bind(fd, (struct sockaddr *)&a, sizeof a) != 0) FAIL(3);
+    int r = bind(fd, (struct sockaddr *)&a, sizeof a);
+    if (nettrace()) fprintf(stderr, "[net] bind fd %d %s:%u -> %d%s\n", fd, inet_ntoa(a.sin_addr), ntohs(a.sin_port), r, r ? strerror(errno) : "");
+    if (r != 0) FAIL(3);
     RET(0, 3);
 }
 static void w_connect(void) {
@@ -203,8 +226,13 @@ static void w_setsockopt(void) {                         /* (s, level, opt, val,
         g_wsa_error = 10042u;                            /* WSAENOPROTOOPT */
         RET(SOCKET_ERROR, 5);
     }
-    if (!host_opt(A32(1), A32(2), &hl, &ho)) RET(0, 5);  /* an option a host lacks: accepted */
-    if (setsockopt(fd_of(A32(0)), hl, ho, &v, sizeof v) != 0) FAIL(5);
+    if (!host_opt(A32(1), A32(2), &hl, &ho)) {             /* an option a host lacks: accepted */
+        if (nettrace()) fprintf(stderr, "[net] setsockopt fd %d level %#x opt %#x = %d: ignored\n", fd_of(A32(0)), A32(1), A32(2), v);
+        RET(0, 5);
+    }
+    int r = setsockopt(fd_of(A32(0)), hl, ho, &v, sizeof v);
+    if (nettrace()) fprintf(stderr, "[net] setsockopt fd %d level %#x opt %#x = %d -> %d%s\n", fd_of(A32(0)), A32(1), A32(2), v, r, r ? strerror(errno) : "");
+    if (r != 0) FAIL(5);
     RET(0, 5);
 }
 static void w_getsockopt(void) {                         /* (s, level, opt, val, &len) */
@@ -214,7 +242,8 @@ static void w_getsockopt(void) {                         /* (s, level, opt, val,
         uint32_t o = A32(3);
         if (A32(2) == 0x4007u && o) {                    /* IPX_ADDRESS: IPXEmu's one adapter */
             memset(hle_ptr(o), 0, 24);
-            MEM8(o + 13) = 1;                            /* node 00:00:00:00:00:01 */
+            uint32_t me = local_ipv4();                  /* node = this host's IPv4, then 00 00 */
+            memcpy(hle_ptr(o + 8), &me, 4);
             MEM8(o + 15) = 1;                            /* status: up */
             MEM32(o + 16) = 1470, MEM32(o + 20) = 1000000;   /* max packet, link speed */
             RET(0, 5);
@@ -419,6 +448,7 @@ static void w_select(void) {                             /* (nfds, read, write, 
     if (ms == 0) r = poll(p, (nfds_t)n, 0);
     else { hle_block_begin(); r = poll(p, (nfds_t)n, ms); hle_block_end(); }
     if (r < 0) FAIL(5);
+    if (nettrace() && r > 0) fprintf(stderr, "[net] select: %d of %d sockets ready\n", r, n);
     uint32_t total = ws_set_keep(rd, p, owner, n, POLLIN | POLLHUP | POLLERR);
     total += ws_set_keep(wr, p, owner, n, POLLOUT | POLLERR);
     total += ws_set_keep(ex, p, owner, n, POLLPRI);
