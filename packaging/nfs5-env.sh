@@ -37,10 +37,8 @@ v=$(nfs5_setting fps_counter)
 case "$v" in
     0|1) export NFS5_FPS_OVERLAY=${NFS5_FPS_OVERLAY:-$v} ;;
 esac
-v=$(nfs5_setting detail)
-case "$v" in
-    low|medium|high) export NFS5_DETAIL=${NFS5_DETAIL:-$v} ;;
-esac
+# (the old launcher DETAIL setting is ignored: rendering always uses the
+# game's own filtering; NFS5_DETAIL=low|high remains a developer switch)
 v=$(nfs5_setting movies)
 case "$v" in
     on|1) export NFS5_PLAY_MOVIES=${NFS5_PLAY_MOVIES:-1}; export NFS5_SKIP_MOVIES=${NFS5_SKIP_MOVIES:-0} ;;

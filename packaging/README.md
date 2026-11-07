@@ -26,7 +26,7 @@ contain an installed game tree. Images containing only a Windows installer
 must first be installed on a PC. The translated executable pair is v3.2;
 other versions are unverified and can be refused with `NFS5_STRICT_VERSION=1`.
 
-Recommended starting settings: **640×480, 30 FPS cap, medium detail, 4:3**.
+Recommended starting settings: **640×480, 30 FPS cap, 4:3**.
 The launcher includes **FPS COUNTER ON/OFF**, movies and controller mapping.
 D-pad selects an option, Left/Right changes it, A confirms and B exits.
 

@@ -660,7 +660,10 @@ static int interrupted = 0;
 static int toast_frames = 0;
 
 static int pad_page_count(void) { return NFS5_ACTION_COUNT + 2; }
-static int settings_page_count(void) { return 8 + 2; } /* 8 rows + LAUNCH + EXIT */
+/* Settings page rows, top to bottom. */
+enum { ROW_FRAME_CAP, ROW_FPS, ROW_RESOLUTION, ROW_ASPECT, ROW_MOVIES, ROW_PADMAP, ROW_INSTALLED,
+       ROW_LAUNCH, ROW_EXIT, ROW_COUNT };
+static int settings_page_count(void) { return ROW_COUNT; }
 static void enter_settings(void) {
     load_persistent();
     selection = 0;
@@ -795,16 +798,18 @@ static void draw_settings_page(SDL_Renderer *ren) {
     SDL_Color normal = COL_TEXT, hot = COL_BRIGHT;
     int y = 124;
     int step = 30;
-    draw_row(ren, "FRAME CAP", frame_cap_label(g_settings.frame_cap), y + 0 * step, selection == 0, normal, hot);
-    draw_row(ren, "FPS COUNTER", g_settings.fps_counter ? "ON" : "OFF", y + 1 * step, selection == 1, normal, hot);
-    draw_row(ren, "DETAIL", nfs5_detail_name(g_settings.detail), y + 2 * step, selection == 2, normal, hot);
-    draw_row(ren, "RESOLUTION", nfs5_resolution_name(g_settings.resolution), y + 3 * step, selection == 3, normal, hot);
-    draw_row(ren, "ASPECT", nfs5_aspect_name(g_settings.aspect), y + 4 * step, selection == 4, normal, hot);
-    draw_row(ren, "MOVIES", nfs5_movies_name(g_settings.movies), y + 5 * step, selection == 5, normal, hot);
-    draw_row(ren, "CONTROLLER MAPPING", "EDIT >", y + 6 * step, selection == 6, normal, hot);
-    draw_row(ren, "INSTALLED GAME", g_data_verified ? "VERIFIED" : "CHECK >", y + 7 * step, selection == 7, normal, hot);
-    draw_row(ren, "SAVE & LAUNCH", "", y + 8 * step + 6, selection == 8, hot, hot);
-    draw_row(ren, "EXIT", "", y + 9 * step + 6, selection == 9, normal, hot);
+#define ROW(r, label, value, gap, n, h) \
+    draw_row(ren, label, value, y + (r) * step + (gap), selection == (r), n, h)
+    ROW(ROW_FRAME_CAP, "FRAME CAP", frame_cap_label(g_settings.frame_cap), 0, normal, hot);
+    ROW(ROW_FPS, "FPS COUNTER", g_settings.fps_counter ? "ON" : "OFF", 0, normal, hot);
+    ROW(ROW_RESOLUTION, "RESOLUTION", nfs5_resolution_name(g_settings.resolution), 0, normal, hot);
+    ROW(ROW_ASPECT, "ASPECT", nfs5_aspect_name(g_settings.aspect), 0, normal, hot);
+    ROW(ROW_MOVIES, "MOVIES", nfs5_movies_name(g_settings.movies), 0, normal, hot);
+    ROW(ROW_PADMAP, "CONTROLLER MAPPING", "EDIT >", 0, normal, hot);
+    ROW(ROW_INSTALLED, "INSTALLED GAME", g_data_verified ? "VERIFIED" : "CHECK >", 0, normal, hot);
+    ROW(ROW_LAUNCH, "SAVE & LAUNCH", "", 6, hot, hot);
+    ROW(ROW_EXIT, "EXIT", "", 6, normal, hot);
+#undef ROW
     if (toast_frames > 0) {
         fill(ren, 0, H - BAR_H, W, BAR_H, COL_OK);
         draw_text(ren, "GAME FILES INSTALLED AND VERIFIED", (W - text_width("GAME FILES INSTALLED AND VERIFIED", 1)) / 2,
@@ -872,21 +877,18 @@ static void draw_error_page(SDL_Renderer *ren) {
 
 static void change_setting(int dir) {
     switch (selection) {
-        case 0:
+        case ROW_FRAME_CAP:
             if (dir > 0) g_settings.frame_cap = g_settings.frame_cap == 60 ? 30 : g_settings.frame_cap == 30 ? 0 : 60;
             else g_settings.frame_cap = g_settings.frame_cap == 60 ? 0 : g_settings.frame_cap == 0 ? 30 : 60;
             break;
-        case 1: g_settings.fps_counter = !g_settings.fps_counter; break;
-        case 2:
-            g_settings.detail = (g_settings.detail + (dir > 0 ? 1 : NFS5_DETAIL_COUNT - 1)) % NFS5_DETAIL_COUNT;
-            break;
-        case 3:
+        case ROW_FPS: g_settings.fps_counter = !g_settings.fps_counter; break;
+        case ROW_RESOLUTION:
             g_settings.resolution = (g_settings.resolution + (dir > 0 ? 1 : NFS5_RES_COUNT - 1)) % NFS5_RES_COUNT;
             break;
-        case 4:
+        case ROW_ASPECT:
             g_settings.aspect = (g_settings.aspect + (dir > 0 ? 1 : NFS5_ASPECT_COUNT - 1)) % NFS5_ASPECT_COUNT;
             break;
-        case 5:
+        case ROW_MOVIES:
             g_settings.movies = !g_settings.movies;
             break;
         default: break;
@@ -894,7 +896,7 @@ static void change_setting(int dir) {
 }
 
 static int confirm_settings(void) {
-    if (selection == 8) {
+    if (selection == ROW_LAUNCH) {
         if (save_persistent() < 0) {
             snprintf(g_install_msg, sizeof g_install_msg, "CANNOT WRITE CONFIG");
             return -1;
@@ -902,11 +904,11 @@ static int confirm_settings(void) {
         chosen_launch = 1;
         return 1;
     }
-    if (selection == 9 || selection == 7) {
-        if (selection == 7) return 0;
+    if (selection == ROW_EXIT || selection == ROW_INSTALLED) {
+        if (selection == ROW_INSTALLED) return 0;
         return 2;
     }
-    if (selection == 6) {
+    if (selection == ROW_PADMAP) {
         pad_selection = 0;
         page = PAGE_PADMAP;
         return 0;
@@ -1064,7 +1066,7 @@ static int run_selftest(void) {
         snprintf(g_status_state, sizeof g_status_state, "%s", terminal[i]);
         page = PAGE_SETTINGS;
         g_settings.fps_counter = 1;
-        selection = 6;
+        selection = ROW_PADMAP;
         confirm_settings();
         apply_status_transition();
         failures += selftest_report("controller page survives terminal worker status",
