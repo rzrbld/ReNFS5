@@ -16,7 +16,7 @@
  *   nfs5-launcher --root DIR --verify      # 0 installed, 3 files missing, 2 wrong version
  *   nfs5-launcher --root DIR --selftest    # launcher/configuration self tests
  *   nfs5-launcher --root DIR --import      # headless import from source/
- *   nfs5-launcher --root DIR --screenshot out.bmp [--page settings|install]
+ *   nfs5-launcher --root DIR --screenshot out.bmp [--page settings|install|padmap|rebind|importing|check|error]
  */
 #define _POSIX_C_SOURCE 200809L
 #define _GNU_SOURCE
@@ -378,14 +378,65 @@ static void draw_text(SDL_Renderer *ren, const char *s, int x, int y, int scale,
     }
 }
 
+/* ------------------------------------------------------------- look
+ * "Porsche design meets DOS setup program": graphite black, Guards Red,
+ * silver and gold; CRT scanlines, double-line dialog window with an inset
+ * title tab, inverted highlight bar, silver key-chip status bar, segmented
+ * LED rev bars. Text, colour and shapes only - no logos. */
+#define COL_BG        ((SDL_Color){12, 12, 14, 255})
+#define COL_SCAN      ((SDL_Color){20, 20, 23, 255})
+#define COL_PANEL     ((SDL_Color){22, 22, 25, 255})
+#define COL_SILVER    ((SDL_Color){198, 200, 204, 255})
+#define COL_SILVER_DK ((SDL_Color){112, 114, 120, 255})
+#define COL_WHITE     ((SDL_Color){244, 243, 238, 255})
+#define COL_RED       ((SDL_Color){213, 0, 28, 255})
+#define COL_RED_DK    ((SDL_Color){110, 0, 14, 255})
+#define COL_GOLD      ((SDL_Color){201, 165, 90, 255})
+#define COL_AMBER     ((SDL_Color){255, 182, 40, 255})
+#define COL_OK        ((SDL_Color){110, 222, 140, 255})
+#define COL_WARN      ((SDL_Color){255, 140, 90, 255})
+#define COL_TEXT      ((SDL_Color){178, 180, 186, 255})
+#define COL_BRIGHT    COL_WHITE
+
+#define WIN_X 22
+#define WIN_Y 96
+#define WIN_W (W - 2 * WIN_X)
+#define WIN_H 340
+#define BAR_H 24
+
+static void set_color(SDL_Renderer *ren, SDL_Color c) { SDL_SetRenderDrawColor(ren, c.r, c.g, c.b, c.a); }
+static void fill(SDL_Renderer *ren, int x, int y, int w, int h, SDL_Color c) {
+    SDL_Rect r = {x, y, w, h};
+    set_color(ren, c);
+    SDL_RenderFillRect(ren, &r);
+}
+static void outline(SDL_Renderer *ren, int x, int y, int w, int h, SDL_Color c) {
+    SDL_Rect r = {x, y, w, h};
+    set_color(ren, c);
+    SDL_RenderDrawRect(ren, &r);
+}
+
 static void draw_text_shadow(SDL_Renderer *ren, const char *s, int x, int y, int scale, SDL_Color color) {
-    SDL_Color shadow = {3, 6, 24, 255};
-    draw_text(ren, s, x + 2, y + 2, scale, shadow);
+    draw_text(ren, s, x + scale, y + scale, scale, (SDL_Color){0, 0, 0, 255});
     draw_text(ren, s, x, y, scale, color);
 }
 
 static void draw_text_center(SDL_Renderer *ren, const char *s, int y, int scale, SDL_Color color) {
     draw_text_shadow(ren, s, (W - text_width(s, scale)) / 2, y, scale, color);
+}
+
+/* Wide letter-spaced wordmark text. */
+static int spaced_width(const char *s, int scale, int gap) {
+    int n = (int)strlen(s);
+    return n ? n * (FONT_W * scale + gap) - gap : 0;
+}
+static void draw_text_spaced(SDL_Renderer *ren, const char *s, int x, int y, int scale, int gap, SDL_Color c) {
+    char one[2] = {0, 0};
+    for (; *s; s++, x += FONT_W * scale + gap) {
+        one[0] = *s;
+        draw_text(ren, one, x + scale, y + scale, scale, (SDL_Color){0, 0, 0, 255});
+        draw_text(ren, one, x, y, scale, c);
+    }
 }
 
 static void draw_wrapped(SDL_Renderer *ren, const char *s, int x, int y, int max_chars, int line_h,
@@ -407,53 +458,161 @@ static void draw_wrapped(SDL_Renderer *ren, const char *s, int x, int y, int max
     }
 }
 
-static void draw_frame(SDL_Renderer *ren, const char *subtitle) {
-    SDL_Color bg_top = {5, 10, 44, 255}, bg_bottom = {2, 16, 66, 255};
-    for (int y = 0; y < H; y++) {
-        SDL_Color c;
-        float t = y / (float)(H - 1);
-        c.r = (Uint8)(bg_top.r + (bg_bottom.r - bg_top.r) * t);
-        c.g = (Uint8)(bg_top.g + (bg_bottom.g - bg_top.g) * t);
-        c.b = (Uint8)(bg_top.b + (bg_bottom.b - bg_top.b) * t);
-        c.a = 255;
-        SDL_SetRenderDrawColor(ren, c.r, c.g, c.b, 255);
-        SDL_RenderDrawLine(ren, 0, y, W, y);
+/* Small rev counter: dark face, silver ring, ticks with a red zone, needle. */
+static void draw_tacho(SDL_Renderer *ren, int cx, int cy, int r, float value) {
+    const float a0 = 3.92699f, a1 = -0.78540f;            /* 225 deg .. -45 deg */
+    for (int dy = -r; dy <= r; dy++) {                    /* face */
+        int dx = (int)SDL_sqrtf((float)(r * r - dy * dy));
+        set_color(ren, (SDL_Color){6, 6, 8, 255});
+        SDL_RenderDrawLine(ren, cx - dx, cy + dy, cx + dx, cy + dy);
     }
-    SDL_Color line = {90, 180, 255, 255}, line2 = {30, 70, 150, 255};
-    SDL_SetRenderDrawColor(ren, line.r, line.g, line.b, line.a);
-    SDL_Rect outer = {18, 14, W - 36, H - 28};
-    SDL_RenderDrawRect(ren, &outer);
-    SDL_Rect inner = {22, 18, W - 44, H - 36};
-    SDL_RenderDrawRect(ren, &inner);
-    SDL_SetRenderDrawColor(ren, line2.r, line2.g, line2.b, line2.a);
-    SDL_Rect third = {26, 22, W - 52, H - 44};
-    SDL_RenderDrawRect(ren, &third);
-    SDL_Color title = {180, 230, 255, 255}, sub = {90, 170, 240, 255};
-    draw_text_center(ren, "NFS5", 44, 5, title);
-    draw_text_center(ren, subtitle, 100, 2, sub);
-    SDL_Color divider = {60, 120, 200, 255};
-    SDL_SetRenderDrawColor(ren, divider.r, divider.g, divider.b, divider.a);
-    SDL_RenderDrawLine(ren, 60, 124, W - 60, 124);
+    for (int i = 0; i < 96; i++) {                        /* ring */
+        float a = i * 6.28318f / 96;
+        set_color(ren, COL_SILVER_DK);
+        SDL_RenderDrawPoint(ren, cx + (int)(SDL_cosf(a) * r), cy + (int)(SDL_sinf(a) * r));
+        SDL_RenderDrawPoint(ren, cx + (int)(SDL_cosf(a) * (r + 1)), cy + (int)(SDL_sinf(a) * (r + 1)));
+    }
+    for (int i = 0; i <= 16; i++) {                       /* ticks */
+        float t = i / 16.0f, a = a0 + (a1 - a0) * t;
+        float ca = SDL_cosf(a), sa = SDL_sinf(a);
+        int inner = (i % 2) ? r - 5 : r - 9;
+        set_color(ren, t >= 0.75f ? COL_RED : COL_SILVER);
+        SDL_RenderDrawLine(ren, cx + (int)(ca * inner), cy - (int)(sa * inner),
+                           cx + (int)(ca * (r - 2)), cy - (int)(sa * (r - 2)));
+    }
+    draw_text(ren, "RPM", cx - 8, cy + r / 2 - 1, 1, COL_SILVER_DK);
+    float a = a0 + (a1 - a0) * value;
+    set_color(ren, COL_RED);
+    for (int d = -1; d <= 1; d++)
+        SDL_RenderDrawLine(ren, cx + d, cy, cx + d + (int)(SDL_cosf(a) * (r - 7)), cy - (int)(SDL_sinf(a) * (r - 7)));
+    fill(ren, cx - 3, cy - 3, 7, 7, COL_SILVER);
+}
+
+/* Segmented LED rev bar: green -> amber -> red, lit up to pct. */
+static void draw_rev_bar(SDL_Renderer *ren, int x, int y, int segs, int seg_w, int h, int lit) {
+    for (int i = 0; i < segs; i++) {
+        float t = i / (float)(segs - 1);
+        SDL_Color on = t < 0.6f ? COL_OK : t < 0.85f ? COL_AMBER : COL_RED;
+        SDL_Color off = {(Uint8)(on.r / 6 + 10), (Uint8)(on.g / 6 + 10), (Uint8)(on.b / 6 + 10), 255};
+        fill(ren, x + i * (seg_w + 3), y, seg_w, h, i < lit ? on : off);
+    }
+}
+
+static const char *g_frame_title = "";
+
+static void draw_frame(SDL_Renderer *ren, const char *subtitle) {
+    g_frame_title = subtitle;
+    /* CRT background */
+    fill(ren, 0, 0, W, H, COL_BG);
+    set_color(ren, COL_SCAN);
+    for (int y = 0; y < H; y += 3) SDL_RenderDrawLine(ren, 0, y, W, y);
+
+    /* header wordmark */
+    draw_text_spaced(ren, "NEED FOR SPEED", 40, 16, 2, 4, COL_RED);
+    draw_text_spaced(ren, "PORSCHE UNLEASHED", 40, 38, 3, 5, COL_SILVER);
+    draw_tacho(ren, W - 62, 40, 30, 0.62f + 0.06f * SDL_sinf(SDL_GetTicks() / 400.0f));
+
+    /* livery stripe */
+    fill(ren, 0, 74, W, 4, COL_RED);
+    fill(ren, 0, 80, W, 1, COL_GOLD);
+    fill(ren, 0, 83, W, 2, COL_RED_DK);
+
+    /* DOS dialog window: drop shadow, panel, double silver border */
+    fill(ren, WIN_X + 6, WIN_Y + 6, WIN_W, WIN_H, (SDL_Color){0, 0, 0, 255});
+    fill(ren, WIN_X, WIN_Y, WIN_W, WIN_H, COL_PANEL);
+    outline(ren, WIN_X + 2, WIN_Y + 2, WIN_W - 4, WIN_H - 4, COL_SILVER);
+    outline(ren, WIN_X + 5, WIN_Y + 5, WIN_W - 10, WIN_H - 10, COL_SILVER);
+
+    /* title tab inset into the top border */
+    if (subtitle && *subtitle) {
+        int tw = text_width(subtitle, 2) + 24;
+        int tx = (W - tw) / 2;
+        fill(ren, tx, WIN_Y - 7, tw, 22, COL_RED);
+        outline(ren, tx, WIN_Y - 7, tw, 22, COL_WHITE);
+        draw_text(ren, subtitle, tx + 12, WIN_Y - 3, 2, COL_WHITE);
+    }
+
+    /* status bar */
+    fill(ren, 0, H - BAR_H, W, BAR_H, COL_SILVER);
+    fill(ren, 0, H - BAR_H, W, 1, COL_WHITE);
 }
 
 static void draw_row(SDL_Renderer *ren, const char *label, const char *value, int y, int selected,
                      SDL_Color normal, SDL_Color hot) {
-    SDL_Color c = selected ? hot : normal;
+    int bx = WIN_X + 12, bw = WIN_W - 24;
     if (selected) {
-        draw_text_shadow(ren, ">", 56, y, 3, hot);
-        SDL_SetRenderDrawColor(ren, 120, 210, 255, 90);
-        SDL_RenderDrawLine(ren, 80, y + 24, W - 60, y + 24);
+        fill(ren, bx, y - 6, bw, 26, COL_RED);
+        fill(ren, bx, y - 6, 4, 26, COL_GOLD);
+        draw_text(ren, label, 64, y, 2, COL_WHITE);
+        if (value && *value) {
+            char buf[64];
+            snprintf(buf, sizeof buf, "< %s >", value);
+            draw_text(ren, buf, W - 64 - text_width(buf, 2), y, 2, COL_WHITE);
+        }
+        return;
     }
-    draw_text_shadow(ren, label, 86, y, 2, c);
+    SDL_Color c = (normal.r == hot.r && normal.g == hot.g && normal.b == hot.b) ? COL_SILVER : COL_TEXT;
+    draw_text_shadow(ren, label, 64, y, 2, c);
     if (value && *value) {
         int vw = text_width(value, 2);
-        draw_text_shadow(ren, value, W - 70 - vw, y, 2, c);
+        draw_text_shadow(ren, value, W - 76 - vw, y, 2, COL_AMBER);
+    }
+    set_color(ren, (SDL_Color){34, 34, 38, 255});
+    SDL_RenderDrawLine(ren, bx + 8, y + 19, bx + bw - 8, y + 19);
+}
+
+/* Status bar: groups separated by two spaces; the first word of each group
+ * is a key, drawn as a red chip ("A SELECT  B EXIT"). Text without groups is
+ * drawn plain. */
+static void draw_hint(SDL_Renderer *ren, const char *text) {
+    int y = H - BAR_H + 9;
+    if (!strstr(text, "  ") && !(text[0] && text[1] == ' ')) {
+        draw_text(ren, text, (W - text_width(text, 1)) / 2, y, 1, (SDL_Color){20, 20, 22, 255});
+        return;
+    }
+    char groups[8][64];
+    int n = 0;
+    const char *p = text;
+    while (*p && n < 8) {
+        while (*p == ' ') p++;
+        const char *e = strstr(p, "  ");
+        size_t len = e ? (size_t)(e - p) : strlen(p);
+        if (len >= sizeof groups[0]) len = sizeof groups[0] - 1;
+        memcpy(groups[n], p, len);
+        groups[n][len] = 0;
+        if (len) n++;
+        p += len;
+    }
+    int total = 0;
+    for (int i = 0; i < n; i++) total += text_width(groups[i], 1) + 10 + 18;
+    int x = (W - total) / 2;
+    for (int i = 0; i < n; i++) {
+        char key[24] = "", *sp = strchr(groups[i], ' ');
+        const char *label = "";
+        if (sp) {
+            size_t kl = (size_t)(sp - groups[i]);
+            if (kl >= sizeof key) kl = sizeof key - 1;
+            memcpy(key, groups[i], kl);
+            key[kl] = 0;
+            label = sp + 1;
+        } else {
+            snprintf(key, sizeof key, "%s", groups[i]);
+        }
+        int kw = text_width(key, 1) + 6;
+        fill(ren, x, y - 4, kw, 15, COL_RED);
+        draw_text(ren, key, x + 3, y, 1, COL_WHITE);
+        x += kw + 5;
+        draw_text(ren, label, x, y, 1, (SDL_Color){20, 20, 22, 255});
+        x += text_width(label, 1) + 18;
     }
 }
 
-static void draw_hint(SDL_Renderer *ren, const char *text) {
-    SDL_Color hint = {60, 110, 180, 255};
-    draw_text(ren, text, (W - text_width(text, 1)) / 2, H - 46, 1, hint);
+/* "A  IMPORT GAME FILES" style choice: red key chip, then the label. */
+static void draw_option(SDL_Renderer *ren, const char *key, const char *label, int x, int y, int primary) {
+    fill(ren, x, y - 5, 24, 24, primary ? COL_RED : COL_RED_DK);
+    outline(ren, x, y - 5, 24, 24, primary ? COL_WHITE : COL_SILVER_DK);
+    draw_text(ren, key, x + 7, y, 2, COL_WHITE);
+    draw_text_shadow(ren, label, x + 36, y, 2, primary ? COL_WHITE : COL_TEXT);
 }
 
 /* ----------------------------------------------------------- persistent */
@@ -568,20 +727,15 @@ static int apply_status_transition(void) {
 static void draw_check_page(SDL_Renderer *ren) {
     draw_frame(ren, "CHECKING GAME FILES");
     const char *msg = g_status_msg[0] ? g_status_msg : "SCANNING DATA AND SOURCE FOLDERS";
-    draw_text_center(ren, "PLEASE WAIT", 210, 3, (SDL_Color){220, 245, 255, 255});
-    draw_wrapped(ren, msg, 80, 260, 48, 16, 2, (SDL_Color){150, 200, 255, 255});
-    int pulse = (SDL_GetTicks() / 90) % 40;
-    for (int i = 0; i < 10; i++) {
-        int active = (i == pulse / 4);
-        SDL_SetRenderDrawColor(ren, active ? 90 : 25, active ? 180 : 60, active ? 255 : 110, 255);
-        SDL_Rect r = {180 + i * 28, 330, 18, 8};
-        SDL_RenderFillRect(ren, &r);
-    }
+    draw_text_center(ren, "PLEASE WAIT", 210, 3, COL_BRIGHT);
+    draw_wrapped(ren, msg, 80, 260, 48, 16, 2, COL_TEXT);
+    int sweep = (int)((SDL_GetTicks() / 70) % 40);
+    draw_rev_bar(ren, (W - (20 * 21 - 3)) / 2, 330, 20, 18, 12, sweep < 20 ? sweep + 1 : 40 - sweep);
     draw_hint(ren, "B CANCEL");
 }
 
 static void draw_install_page(SDL_Renderer *ren) {
-    SDL_Color text = {150, 200, 255, 255}, bright = {220, 245, 255, 255};
+    SDL_Color text = COL_TEXT, bright = COL_BRIGHT;
     if (!strcmp(g_status_state, "READY")) {
         draw_frame(ren, "GAME FILES FOUND");
         draw_text_center(ren, "READY TO COPY TO DEVICE", 150, 2, bright);
@@ -591,18 +745,18 @@ static void draw_install_page(SDL_Renderer *ren) {
         draw_wrapped(ren, "ABOUT 600 MB WILL BE COPIED TO DATA/. THE ORIGINAL FILES STAY IN SOURCE/.", 60,
                      240, 52, 16, 1, text);
         draw_wrapped(ren, g_status_msg, 60, 275, 52, 16, 1, text);
-        draw_text_shadow(ren, "A  IMPORT GAME FILES", 60, 340, 2, bright);
-        draw_text_shadow(ren, "B  EXIT WITHOUT CHANGING", 60, 370, 2, text);
+        draw_option(ren, "A", "IMPORT GAME FILES", 60, 340, 1);
+        draw_option(ren, "B", "EXIT WITHOUT CHANGING", 60, 370, 0);
         draw_hint(ren, "A IMPORT   B EXIT   UP/DOWN NOT USED");
     } else if (!strcmp(g_status_state, "WRONGVER")) {
         draw_frame(ren, "UNSUPPORTED GAME VERSION");
-        draw_wrapped(ren, "THE GAME FILES IN SOURCE/ ARE NOT THE SUPPORTED V3.2 VERSION.", 60, 160, 52, 18, 2,
-                     (SDL_Color){255, 190, 120, 255});
+        draw_wrapped(ren, "THE GAME FILES IN SOURCE/ ARE NOT THE SUPPORTED V3.2 VERSION.", 60, 160, 42, 18, 2,
+                     COL_WARN);
         draw_wrapped(ren, g_status_msg, 60, 220, 52, 16, 1, text);
         draw_wrapped(ren, "REPLACE SOURCE/ WITH AN EXTRACTED V3.2 INSTALL (PORSCHE.EXE + DRIVERS/DX7Z.DLL), THEN PRESS A.", 60,
                      270, 52, 16, 1, text);
-        draw_text_shadow(ren, "A  RESCAN SOURCE", 60, 350, 2, bright);
-        draw_text_shadow(ren, "B  EXIT", 60, 380, 2, text);
+        draw_option(ren, "A", "RESCAN SOURCE", 60, 350, 1);
+        draw_option(ren, "B", "EXIT", 60, 380, 0);
         draw_hint(ren, "A RESCAN   B EXIT");
     } else {
         draw_frame(ren, "GAME FILES NOT INSTALLED");
@@ -610,41 +764,35 @@ static void draw_install_page(SDL_Renderer *ren) {
         snprintf(path, sizeof path, "COPY YOUR EXTRACTED V%s INSTALL (OR A .ZIP OF IT) INTO:", NFS5_VERSION_TEXT);
         draw_wrapped(ren, path, 60, 150, 52, 16, 1, bright);
         snprintf(path, sizeof path, "%s/source", g_root);
-        draw_wrapped(ren, path, 60, 185, 52, 16, 2, (SDL_Color){255, 210, 120, 255});
+        if (strlen(path) <= 42) draw_wrapped(ren, path, 60, 185, 42, 18, 2, COL_AMBER);
+        else draw_wrapped(ren, path, 60, 185, 84, 12, 1, COL_AMBER);   /* long path: small type, max 3 lines */
         draw_wrapped(ren, "KEEP PORSCHE.EXE, DRIVERS/DX7Z.DLL, FEDATA/ AND GAMEDATA/ TOGETHER. THE PACKAGE NEVER CONTAINS GAME FILES.", 60,
                      245, 52, 16, 1, text);
         draw_wrapped(ren, g_status_msg, 60, 290, 52, 16, 1, text);
-        draw_text_shadow(ren, "A  RESCAN SOURCE FOLDER", 60, 350, 2, bright);
-        draw_text_shadow(ren, "B  EXIT", 60, 382, 2, text);
+        draw_option(ren, "A", "RESCAN SOURCE FOLDER", 60, 350, 1);
+        draw_option(ren, "B", "EXIT", 60, 382, 0);
         draw_hint(ren, "A RESCAN   B EXIT");
     }
 }
 
 static void draw_importing_page(SDL_Renderer *ren) {
     draw_frame(ren, "INSTALLING GAME FILES");
-    draw_text_center(ren, g_status_msg[0] ? g_status_msg : "COPYING", 170, 2, (SDL_Color){220, 245, 255, 255});
-    SDL_SetRenderDrawColor(ren, 8, 25, 70, 255);
-    SDL_Rect bar = {48, 240, 544, 26};
-    SDL_RenderFillRect(ren, &bar);
-    int pct = g_status_pct < 0 ? 0 : g_status_pct;
-    for (int col = 0; col < 66; col++)
-        for (int row = 0; row < 3; row++) {
-            int active = col < pct * 66 / 100;
-            SDL_SetRenderDrawColor(ren, active ? 90 : 25, active ? 180 : 60, active ? 255 : 110, 255);
-            SDL_Rect cell = {50 + col * 8, 244 + row * 6, 5, 4};
-            SDL_RenderFillRect(ren, &cell);
-        }
+    draw_text_center(ren, g_status_msg[0] ? g_status_msg : "COPYING", 170, 2, COL_BRIGHT);
+    int pct = g_status_pct < 0 ? 0 : g_status_pct > 100 ? 100 : g_status_pct;
+    fill(ren, 46, 236, W - 92, 32, (SDL_Color){0, 0, 0, 255});
+    outline(ren, 46, 236, W - 92, 32, COL_SILVER_DK);
+    draw_rev_bar(ren, 52, 242, 40, 10, 20, pct * 40 / 100);
     char line[64];
     snprintf(line, sizeof line, "%d%%", pct);
-    draw_text_center(ren, line, 285, 2, (SDL_Color){150, 200, 255, 255});
+    draw_text_center(ren, line, 285, 2, COL_TEXT);
     draw_wrapped(ren, "DO NOT REMOVE THE SD CARD. THE ORIGINAL FILES IN SOURCE/ ARE KEPT.", 60, 340, 52, 16, 1,
-                 (SDL_Color){150, 200, 255, 255});
+                 COL_TEXT);
     draw_hint(ren, "B CANCEL - PARTIAL FILES ARE SAFE TO RE-IMPORT");
 }
 
 static void draw_settings_page(SDL_Renderer *ren) {
     draw_frame(ren, "SETTINGS");
-    SDL_Color normal = {150, 200, 255, 255}, hot = {220, 245, 255, 255};
+    SDL_Color normal = COL_TEXT, hot = COL_BRIGHT;
     int y = 124;
     int step = 30;
     draw_row(ren, "FRAME CAP", frame_cap_label(g_settings.frame_cap), y + 0 * step, selection == 0, normal, hot);
@@ -658,7 +806,9 @@ static void draw_settings_page(SDL_Renderer *ren) {
     draw_row(ren, "SAVE & LAUNCH", "", y + 8 * step + 6, selection == 8, hot, hot);
     draw_row(ren, "EXIT", "", y + 9 * step + 6, selection == 9, normal, hot);
     if (toast_frames > 0) {
-        draw_text_center(ren, "GAME FILES INSTALLED AND VERIFIED", 430, 2, (SDL_Color){120, 255, 160, 255});
+        fill(ren, 0, H - BAR_H, W, BAR_H, COL_OK);
+        draw_text(ren, "GAME FILES INSTALLED AND VERIFIED", (W - text_width("GAME FILES INSTALLED AND VERIFIED", 1)) / 2,
+                  H - BAR_H + 9, 1, (SDL_Color){10, 30, 14, 255});
     } else {
         draw_hint(ren, "UP/DOWN MOVE  LEFT/RIGHT CHANGE  A SELECT  B EXIT");
     }
@@ -666,8 +816,8 @@ static void draw_settings_page(SDL_Renderer *ren) {
 
 static void draw_padmap_page(SDL_Renderer *ren) {
     draw_frame(ren, "CONTROLLER MAPPING");
-    SDL_Color normal = {150, 200, 255, 255}, hot = {220, 245, 255, 255};
-    int y = 134;
+    SDL_Color normal = COL_TEXT, hot = COL_BRIGHT;
+    int y = 122;
     for (int i = 0; i < NFS5_ACTION_COUNT; i++) {
         char label[32];
         snprintf(label, sizeof label, "%s", nfs5_action_name(i));
@@ -680,35 +830,41 @@ static void draw_padmap_page(SDL_Renderer *ren) {
         snprintf(upper, sizeof upper, "%s", value);
         for (char *p = upper; *p; p++)
             if (*p >= 'a' && *p <= 'z') *p = (char)(*p - 'a' + 'A');
-        draw_row(ren, label, upper, y + i * 27, pad_selection == i, normal, hot);
+        draw_row(ren, label, upper, y + i * 25, pad_selection == i, normal, hot);
     }
-    draw_row(ren, "RESET DEFAULTS", "", y + NFS5_ACTION_COUNT * 27 + 8,
+    draw_row(ren, "RESET DEFAULTS", "", y + NFS5_ACTION_COUNT * 25 + 6,
              pad_selection == NFS5_ACTION_COUNT, hot, hot);
-    draw_row(ren, "BACK", "", y + NFS5_ACTION_COUNT * 27 + 40, pad_selection == NFS5_ACTION_COUNT + 1,
+    draw_row(ren, "BACK", "", y + NFS5_ACTION_COUNT * 25 + 34, pad_selection == NFS5_ACTION_COUNT + 1,
              normal, hot);
     draw_hint(ren, "A REBIND   LEFT/RIGHT CYCLE   B BACK");
 }
 
 static void draw_capture_overlay(SDL_Renderer *ren) {
-    SDL_SetRenderDrawColor(ren, 0, 0, 0, 190);
-    SDL_Rect r = {60, 170, W - 120, 140};
-    SDL_RenderFillRect(ren, &r);
-    SDL_SetRenderDrawColor(ren, 120, 210, 255, 255);
-    SDL_RenderDrawRect(ren, &r);
-    draw_text_center(ren, "PRESS A CONTROLLER BUTTON", 205, 2, (SDL_Color){220, 245, 255, 255});
+    int x = 80, y = 176, w = W - 160, h = 132;
+    fill(ren, x + 6, y + 6, w, h, (SDL_Color){0, 0, 0, 255});
+    fill(ren, x, y, w, h, COL_PANEL);
+    outline(ren, x + 2, y + 2, w - 4, h - 4, COL_SILVER);
+    outline(ren, x + 5, y + 5, w - 10, h - 10, COL_SILVER);
+    fill(ren, x + 2, y + 2, w - 4, 22, COL_RED);
+    draw_text(ren, "REBIND", (W - text_width("REBIND", 2)) / 2, y + 6, 2, COL_WHITE);
+    draw_text_center(ren, "PRESS A CONTROLLER BUTTON", y + 40, 2, COL_BRIGHT);
     char line[64];
     const char *name = nfs5_action_name(capture_action);
     snprintf(line, sizeof line, "FOR: %s", name ? name : "?");
-    draw_text_center(ren, line, 245, 2, (SDL_Color){255, 210, 120, 255});
-    draw_text_center(ren, "ESC CANCELS", 285, 1, (SDL_Color){150, 200, 255, 255});
+    for (char *q = line; *q; q++) {
+        if (*q >= 'a' && *q <= 'z') *q = (char)(*q - 'a' + 'A');
+        if (*q == '_') *q = ' ';
+    }
+    draw_text_center(ren, line, y + 70, 2, COL_AMBER);
+    draw_text_center(ren, "ESC CANCELS", y + 102, 1, COL_TEXT);
 }
 
 static void draw_error_page(SDL_Renderer *ren) {
     draw_frame(ren, "ERROR");
-    draw_wrapped(ren, g_status_msg[0] ? g_status_msg : "UNKNOWN ERROR", 60, 175, 52, 18, 2,
-                 (SDL_Color){255, 190, 120, 255});
-    draw_text_shadow(ren, "A  RETRY", 60, 340, 2, (SDL_Color){220, 245, 255, 255});
-    draw_text_shadow(ren, "B  EXIT", 60, 374, 2, (SDL_Color){150, 200, 255, 255});
+    draw_wrapped(ren, g_status_msg[0] ? g_status_msg : "UNKNOWN ERROR", 60, 175, 42, 18, 2,
+                 COL_WARN);
+    draw_option(ren, "A", "RETRY", 60, 340, 1);
+    draw_option(ren, "B", "EXIT", 60, 374, 0);
     draw_hint(ren, "SEE CONFIG/LAUNCHER-WORKER.LOG FOR DETAILS");
 }
 
@@ -987,6 +1143,22 @@ sdl_ready:;
             snprintf(g_status_state, sizeof g_status_state, "MISSING");
             snprintf(g_status_msg, sizeof g_status_msg, "NO GAME FILES FOUND UNDER SOURCE/");
             page = PAGE_INSTALL;
+        } else if (screenshot_page && !strcmp(screenshot_page, "padmap")) {
+            load_persistent();
+            page = PAGE_PADMAP;
+        } else if (screenshot_page && !strcmp(screenshot_page, "rebind")) {
+            load_persistent();
+            page = PAGE_PADMAP;
+            capture_action = 0;
+        } else if (screenshot_page && !strcmp(screenshot_page, "importing")) {
+            snprintf(g_status_msg, sizeof g_status_msg, "COPYING GAMEDATA/CARMODEL");
+            g_status_pct = 64;
+            page = PAGE_IMPORTING;
+        } else if (screenshot_page && !strcmp(screenshot_page, "check")) {
+            page = PAGE_CHECK;
+        } else if (screenshot_page && !strcmp(screenshot_page, "error")) {
+            snprintf(g_status_msg, sizeof g_status_msg, "CANNOT READ SOURCE/PORSCHE.EXE - CHECK THE COPY IS COMPLETE");
+            page = PAGE_ERROR;
         } else if (screenshot_page && !strcmp(screenshot_page, "settings")) {
             load_persistent();
             page = PAGE_SETTINGS;
