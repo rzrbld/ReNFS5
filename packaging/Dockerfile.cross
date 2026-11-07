@@ -1,0 +1,39 @@
+# Public, reproducible aarch64 cross-toolchain for the NFS5 static port.
+#
+# Build (network required once; the image is then self-contained):
+#   docker build -f packaging/Dockerfile.cross -t nfs5-cross:bookworm packaging
+#
+# The base image is pinned by digest. Debian package versions are frozen in the
+# image; apt updates between builds can still change binaries, so record the
+# image id produced by your build (see docs/packaging/BUILDING.md).
+#
+# We use Debian's multiarch packages rather than a device SDK: the handheld's
+# firmware supplies SDL2 and the proprietary Mali GLES driver at runtime. The
+# only thing we take from arm64 packages is public headers and link-time .so
+# files. libGLESv2.so is never packaged; scripts/cross_prepare.sh replaces it
+# with a link-only ABI stub that records SONAME libmali.so.0 (see
+# docs/packaging/COMPATIBILITY.md).
+FROM debian:bookworm-slim@sha256:99c0b25c46d0214d5a2091092e7908907dcaecd6a962cde0ac700acee222b6f3
+
+RUN dpkg --add-architecture arm64 \
+ && apt-get update \
+ && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+      gcc-aarch64-linux-gnu \
+      g++-aarch64-linux-gnu \
+      libc6-dev-arm64-cross \
+      binutils-aarch64-linux-gnu \
+      libsdl2-dev:arm64 \
+      libsdl2-ttf-dev:arm64 \
+      libgles2-mesa-dev:arm64 \
+      libegl-dev:arm64 \
+      ca-certificates \
+      make \
+      pkg-config \
+      python3 \
+ && rm -rf /var/lib/apt/lists/*
+
+# Cross pkg-config: the arm64 .pc files live in the multiarch directory.
+ENV PKG_CONFIG_LIBDIR=/usr/lib/aarch64-linux-gnu/pkgconfig:/usr/share/pkgconfig
+ENV PKG_CONFIG_SYSROOT_DIR=/
+
+WORKDIR /src

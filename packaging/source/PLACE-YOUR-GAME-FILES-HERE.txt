@@ -1,0 +1,22 @@
+PLACE YOUR OWN NEED FOR SPEED: PORSCHE UNLEASHED (v3.2) FILES HERE
+
+The launcher accepts ONE of these in this "source" folder:
+
+  1. the installed game folder (the one containing Porsche.exe,
+     Drivers/dx7z.dll, FEData/ and GameData/), or
+  2. a .zip of that folder, or
+  3. a CD image: a single .iso, a .bin with its .cue file, or a .mdf with its
+     .mds descriptor.
+
+It unpacks/imports them with built-in native code (no unzip or Python needed on
+the device) and copies the game into ../data/.
+
+The exact translated v3.2 pair is verified by SHA-256:
+
+  Porsche.exe       96af10308b12840c7a0770ff87443a8516c3b756f34d2bc276988cc64f56b98c
+  Drivers/dx7z.dll  0433cc93106603e9e0a81168e2fa44c40e3121a71b7ae9cd6f3b1f7551f3fc18
+  version.txt       3.2
+
+Files from a CD, patch or no-CD EXE are imported as-is and reported as an
+unverified version (NFS5_STRICT_VERSION=1 refuses them). Your source files are
+left untouched and the package itself never contains game data.

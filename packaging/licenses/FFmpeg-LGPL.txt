@@ -1,0 +1,12 @@
+The port embeds a minimal, unmodified-source FFmpeg subset (LGPL-2.1-or-later)
+to decode the game's EAMAD movies: libavformat (ea demuxer), libavcodec (eamad
+video decoder, adpcm_ea_r1 audio decoder) and libavutil. No swscale, no encoders.
+FFmpeg is linked statically into the port binary.
+
+Licensed under the GNU Lesser General Public License v2.1 or later; the license
+text is in LGPL-2.1.txt. Relinking is possible: the port's build scripts and
+full source are available in the project repository, and the static FFmpeg
+archives are rebuilt from unmodified upstream sources by
+scripts/build_ffmpeg_mini.sh.
+
+FFmpeg: https://ffmpeg.org   Copyright (c) 2000-2024 the FFmpeg developers.
