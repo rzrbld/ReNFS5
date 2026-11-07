@@ -11,6 +11,9 @@ view) hover around 30.
 - The FPS cap is a pacing target, not a guarantee that every scene reaches it.
 - Higher resolutions are unverified on handhelds.
 - Some original keyboard graphics/HUD shortcuts are not implemented.
+- Multiplayer: LAN games work between handhelds; typing the address for
+  **peer to peer – IP** does not work yet (the on-screen keypad, Select + X,
+  opens but its digits do not reach the field). Internet games are untested.
 
 Back up saves/ and configs/ before upgrading. For errors, retain log.txt and
 configs/launcher-worker.log.

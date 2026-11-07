@@ -39,6 +39,26 @@ uses. A PortMaster port: it uses the firmware's PortMaster for controls
 (gptokeyb) and launch handling. Tested on muOS (RG40XX-H, H700, Mali) and
 BananaOS (RG DS, RK3568, Mesa Panfrost); other firmwares are untested.
 
+## Multiplayer
+
+**LAN games** work between handhelds on the same network (tested: muOS
+RG40XX-H and BananaOS RG DS on the same Wi-Fi). In the game, open
+**Multiplayer → LAN games**:
+
+1. On one handheld choose **create...**, confirm the game name with **ok**;
+   it opens the lobby with that handheld as player 1.
+2. On the other handheld the game appears in the **LAN games** list within a
+   few seconds; select it and choose **join**.
+
+The game's IPX network is carried over UDP: discovery broadcasts on UDP port
+1106 and each game uses one more UDP port. Both handhelds must be on the same
+subnet, and the network must pass broadcasts (some guest or "client
+isolation" Wi-Fi networks do not).
+
+**Internet games** and **peer to peer – IP** are listed but untested; typing an
+IP address on a handheld does not work yet (see the known issues).
+**Peer to peer – modem** is not available.
+
 ## Saves and settings
 
 Saves are in `nfs5/saves/`; settings are in `nfs5/configs/`.
