@@ -2,9 +2,9 @@
 <gameList>
   <game>
     <path>./NFS5.sh</path>
-    <name>Need for Speed: Porsche Unleashed</name>
-    <desc>Experimental ARM64 static-recompilation port of Need for Speed: Porsche Unleashed (2000, v3.2) for Anbernic H700 handhelds. Supply your own game files as a folder, ZIP or CD image; the native launcher unpacks/verifies/imports them and provides a settings UI. OpenGL ES renderer, SDL2 input/audio. Desktop is drivable; handheld performance is not yet qualified.</desc>
-    <developer>EA Canada / EA Seattle; NFS5 static port contributors</developer>
+    <name>ReNFS5: Recomp Unleashed</name>
+    <desc>Experimental ARM64 static-recompilation port of Need for Speed: Porsche Unleashed (2000, v3.2) for H700 handhelds. Supply your own game files as a folder, ZIP or CD image; the native launcher unpacks/verifies/imports them and provides a settings UI. OpenGL ES renderer via SDL2, SDL2 input/audio. On H700 races mostly run above 30 FPS.</desc>
+    <developer>ReNFS5 port by rzrbld (original game: EA Canada / EA Seattle)</developer>
     <image>./nfs5/screenshot.png</image>
     <genre>Racing</genre>
     <players>1</players>

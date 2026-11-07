@@ -1,6 +1,6 @@
-# renfs5
+# ReNFS5: Recomp Unleashed
 
-renfs5 is a community ARM64 Linux port of **Need for Speed: Porsche Unleashed**
+ReNFS5 is an unofficial community ARM64 Linux port of **Need for Speed: Porsche Unleashed**
 (2000, v3.2), using static recompilation, OpenGL ES graphics and SDL2. It targets
 Allwinner H700 handhelds running 64-bit muOS or compatible PortMaster firmware.
 
@@ -69,8 +69,8 @@ Thanks to EA Canada / EA Seattle for the original game, and to pcrecomp,
 PortMaster, SDL, FFmpeg, miniz and the Desert Storm / The ReThing port work.
 
 **Need for Speed: Porsche Unleashed**, its original code, artwork, audio and
-trademarks belong to their respective rights holders. This project is unofficial
-and is not affiliated with or endorsed by them. The MIT license does not cover
+trademarks belong to their respective rights holders (Electronic Arts, Porsche).
+This project is unofficial and is not affiliated with or endorsed by them. The MIT license does not cover
 the original game or relicense third-party components. No original game,
 executables, disc images or assets are included in the public source repository.
 Users must supply their own game files.

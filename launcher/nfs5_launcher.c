@@ -508,8 +508,8 @@ static void draw_frame(SDL_Renderer *ren, const char *subtitle) {
     for (int y = 0; y < H; y += 3) SDL_RenderDrawLine(ren, 0, y, W, y);
 
     /* header wordmark */
-    draw_text_spaced(ren, "NEED FOR SPEED", 40, 16, 2, 4, COL_RED);
-    draw_text_spaced(ren, "PORSCHE UNLEASHED", 40, 38, 3, 5, COL_SILVER);
+    draw_text_spaced(ren, "RENFS5", 40, 16, 2, 4, COL_RED);
+    draw_text_spaced(ren, "RECOMP UNLEASHED", 40, 38, 3, 5, COL_SILVER);
     draw_tacho(ren, W - 62, 40, 30, 0.62f + 0.06f * SDL_sinf(SDL_GetTicks() / 400.0f));
 
     /* livery stripe */

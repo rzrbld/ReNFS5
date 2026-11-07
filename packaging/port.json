@@ -1,16 +1,23 @@
 {
   "version": 4,
   "name": "nfs5.zip",
-  "items": ["NFS5.sh", "nfs5/"],
+  "items": [
+    "NFS5.sh",
+    "nfs5/"
+  ],
   "items_opt": [],
   "attr": {
-    "title": "Need for Speed: Porsche Unleashed",
-    "porter": ["rzrbld"],
-    "desc": "Experimental ARM64 static-recompilation port of Need for Speed: Porsche Unleashed (2000, v3.2) for Anbernic H700 handhelds. DirectDraw7/Direct3D7 is translated to OpenGL ES 2.0; SDL2 handles window/input/audio. Players supply their own game files (folder, ZIP or CD image); the native launcher unpacks and verifies them, with no Python or unzip needed on device. Native settings UI (frame cap, detail, resolution, aspect, controller mapping). Desktop is playable up to a drivable Quick Race; handheld performance is not yet qualified.",
+    "title": "ReNFS5: Recomp Unleashed",
+    "porter": [
+      "rzrbld"
+    ],
+    "desc": "Experimental ARM64 static-recompilation port of Need for Speed: Porsche Unleashed (2000, v3.2) for H700 handhelds. DirectDraw7/Direct3D7 is translated to OpenGL ES 3, resolved through SDL2 (no direct Mali dependency). Players supply their own game files (folder, ZIP or CD image); the native launcher unpacks and verifies them, with no Python or unzip needed on device. Settings UI: frame cap, FPS counter, resolution, aspect, movies, controller mapping. On H700 races mostly run above 30 FPS.",
     "desc_md": null,
-    "inst": "Extract nfs5.zip into the device's ports folder (not the SD-card root). Put your own game files into nfs5/source/: the installed game folder, a .zip of it, or a CD image (.iso, .bin + .cue, or .mdf + .mds). The native launcher unpacks the image/zip with built-in code, verifies what it finds, copies the game into nfs5/data/ (allow ~1.5 GiB free) and opens the settings menu (frame cap, detail, resolution, aspect, controller mapping). Player data is kept beside the binaries in nfs5/saves/ and nfs5/configs/. Then launch NFS5. Requires AArch64 firmware with glibc 2.36+, SDL2, SDL2_ttf and libmali.so.0. Device FPS and full gameplay are not yet qualified on H700.",
+    "inst": "Extract nfs5.zip into the device's ports folder (not the SD-card root). Put your own game files into nfs5/source/: the installed game folder, a .zip of it, or a CD image (.iso, .bin + .cue, or .mdf + .mds). The native launcher unpacks the image/zip with built-in code, verifies what it finds, copies the game into nfs5/data/ (allow ~1.5 GiB free) and opens the settings menu. Player data is kept beside the binaries in nfs5/saves/ and nfs5/configs/. Then launch NFS5. Requires AArch64 firmware with glibc 2.36+, SDL2, SDL2_ttf and an OpenGL ES 3.x driver that SDL2 can load.",
     "inst_md": null,
-    "genres": ["racing"],
+    "genres": [
+      "racing"
+    ],
     "image": null,
     "rtr": false,
     "exp": true,
@@ -18,7 +25,9 @@
     "store": [],
     "availability": "commercial",
     "reqs": [],
-    "arch": ["aarch64"],
+    "arch": [
+      "aarch64"
+    ],
     "min_glibc": "2.36"
   }
 }
