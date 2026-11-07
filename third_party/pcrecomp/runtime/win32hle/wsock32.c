@@ -20,6 +20,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <unistd.h>
@@ -176,7 +177,19 @@ static void w_connect(void) {
     RET(0, 3);
 }
 static void w_listen(void) { if (listen(fd_of(A32(0)), (int)A32(1)) != 0) FAIL(2); RET(0, 2); }
-static int nettrace(void) { static int on = -1; if (on < 0) on = getenv("HLE_NETTRACE") != NULL; return on; }
+static int nettrace(void) { static int on = -1; if (on < 0) on = getenv("HLE_NETTRACE") ? atoi(getenv("HLE_NETTRACE")) : 0; if (on < 0) on = 1; return on; }
+/* HLE_NETTRACE=2: also the payload's first bytes, in hex */
+static void net_hex(const void *buf, ssize_t n) {
+    if (nettrace() < 2 || n <= 0 || !buf) return;
+    const uint8_t *b = (const uint8_t *)buf;
+    const ssize_t max = nettrace() >= 3 ? 512 : 48;     /* 3: whole packets */
+    char line[3 * 512 + 1];
+    int k = 0;
+    for (ssize_t i = 0; i < n && i < max; i++) k += snprintf(line + k, sizeof line - (size_t)k, "%02x ", b[i]);
+    struct timespec t;
+    clock_gettime(CLOCK_MONOTONIC, &t);
+    fprintf(stderr, "[net]   %lld.%03ld %s%s\n", (long long)t.tv_sec, t.tv_nsec / 1000000, line, n > max ? "..." : "");
+}
 static void w_sendto(void) {                             /* (s, buf, len, flags, to, tolen) */
     struct sockaddr_in a;
     ssize_t n;
@@ -184,7 +197,8 @@ static void w_sendto(void) {                             /* (s, buf, len, flags,
         if (is_ipx(fd_of(A32(0)))) ipx_to_host((const uint8_t *)APTR(4), &a, 0);
         else to_host((const uint8_t *)APTR(4), &a);
         n = sendto(fd_of(A32(0)), APTR(1), A32(2), MSG_NOSIGNAL, (struct sockaddr *)&a, sizeof a);
-        if (nettrace()) fprintf(stderr, "[net] sendto %s:%u %u bytes -> %d%s\n", inet_ntoa(a.sin_addr), ntohs(a.sin_port), A32(2), (int)n, n < 0 ? strerror(errno) : "");
+        if (nettrace()) fprintf(stderr, "[net] sendto fd %d %s:%u %u bytes -> %d%s\n", fd_of(A32(0)), inet_ntoa(a.sin_addr), ntohs(a.sin_port), A32(2), (int)n, n < 0 ? strerror(errno) : "");
+        net_hex(APTR(1), (ssize_t)A32(2));
     }
     else n = send(fd_of(A32(0)), APTR(1), A32(2), MSG_NOSIGNAL);
     if (n < 0) FAIL(6);
@@ -196,7 +210,8 @@ static void w_recvfrom(void) {                           /* (s, buf, len, flags,
     socklen_t al = sizeof a;
     ssize_t n = recvfrom(fd_of(A32(0)), APTR(1), A32(2), MSG_DONTWAIT, (struct sockaddr *)&a, &al);
     if (n < 0) FAIL(6);
-    if (nettrace()) fprintf(stderr, "[net] recvfrom %s:%u %d bytes\n", inet_ntoa(a.sin_addr), ntohs(a.sin_port), (int)n);
+    if (nettrace()) fprintf(stderr, "[net] recvfrom fd %d %s:%u %d bytes\n", fd_of(A32(0)), inet_ntoa(a.sin_addr), ntohs(a.sin_port), (int)n);
+    net_hex(APTR(1), n);
     int ipx = is_ipx(fd_of(A32(0)));
     if (A32(4)) { if (ipx) ipx_to_guest(&a, (uint8_t *)APTR(4), 0); else to_guest(&a, (uint8_t *)APTR(4)); }
     if (A32(5)) MEM32(A32(5)) = ipx ? 14 : 16;
@@ -282,6 +297,10 @@ static void w_getsockname(void) {
     int ipx = is_ipx(fd_of(A32(0)));
     if (ipx) ipx_to_guest(&a, (uint8_t *)APTR(1), 1); else to_guest(&a, (uint8_t *)APTR(1));
     if (A32(2)) MEM32(A32(2)) = ipx ? 14 : 16;
+    if (nettrace()) {
+        fprintf(stderr, "[net] getsockname fd %d port %u\n", fd_of(A32(0)), ntohs(a.sin_port));
+        net_hex(APTR(1), ipx ? 14 : 16);
+    }
     RET(0, 3);
 }
 
