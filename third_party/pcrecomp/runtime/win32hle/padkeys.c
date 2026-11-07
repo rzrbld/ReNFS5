@@ -13,8 +13,8 @@
  *   NFS5_PAD_KEYS=1 NFS5_VIRTUAL_PAD=1 \
  *   NFS5_PAD_TIMELINE="1000:hat0=2,1400:hat0=0,2000:b0=1,2400:b0=0"
  * attaches one SDL virtual controller and drives its buttons from the timeline
- * (button indices follow SDL_GameController: 0=A, 1=B, 2=X, 3=Y, 4=LB, 5=RB,
- * 6=Back, 7=Start; hat values are SDL_HAT_* bits).
+ * (button indices follow SDL_GameControllerButton: 0=A, 1=B, 2=X, 3=Y, 4=Back,
+ * 5=Guide, 6=Start, 9=LB, 10=RB; hat values are SDL_HAT_* bits).
  */
 #include <SDL.h>
 #include <stdio.h>
@@ -276,8 +276,62 @@ static int act_down(SDL_GameController *c, int a) {
  * (DIJOYSTATE indices).
  * Present exactly that layout: left stick X (or the steer buttons) steers, the
  * throttle/brake buttons or triggers work the pedal axis. */
+/* ---- on-screen keypad (Select + X): 1-9, 0, '.', DEL and OK, for typed
+ * fields such as the peer-to-peer IP address on a handheld with no keyboard.
+ * Keys reach the game as real key presses (WM_KEYDOWN, TranslateMessage makes
+ * the WM_CHAR). While it is open the game gets no pad input. The renderer
+ * draws it (hle_keypad_state). Cells 0-11 are the 3x4 grid, 12 is OK. */
+static volatile int g_kp_open, g_kp_sel;
+int hle_keypad_state(int *sel) { if (sel) *sel = g_kp_sel; return g_kp_open; }
+static void kp_type(uint32_t vk, uint32_t scan) {
+    hle_input_key(1, vk, scan);
+    hle_input_key(0, vk, scan);
+}
+static void kp_press(int cell) {
+    static const struct { uint32_t vk, scan; } k[12] = {
+        {'1', 0x02}, {'2', 0x03}, {'3', 0x04}, {'4', 0x05}, {'5', 0x06}, {'6', 0x07},
+        {'7', 0x08}, {'8', 0x09}, {'9', 0x0A}, {0xBE, 0x34} /* . */, {'0', 0x0B}, {0x08, 0x0E} /* DEL */ };
+    if (cell >= 0 && cell < 12) kp_type(k[cell].vk, k[cell].scan);
+    else { kp_type(VK_RETURN_, 0x1C); g_kp_open = 0; }      /* OK: Enter, and close */
+}
+/* Returns 1 while the keypad owns the pad (the caller then sends the game nothing). */
+static int keypad_poll(SDL_GameController *c) {
+    static uint8_t prev[SDL_CONTROLLER_BUTTON_MAX];
+    uint8_t now[SDL_CONTROLLER_BUTTON_MAX];
+    for (int b = 0; b < SDL_CONTROLLER_BUTTON_MAX; b++)
+        now[b] = SDL_GameControllerGetButton(c, (SDL_GameControllerButton)b) != 0;
+#define KP_EDGE(b) (now[b] && !prev[b])
+    if (getenv("NFS5_PAD_DEBUG"))
+        for (int b = 0; b < SDL_CONTROLLER_BUTTON_MAX; b++)
+            if (now[b] != prev[b])
+                fprintf(stderr, "[padkeys] button %s %s\n",
+                        SDL_GameControllerGetStringForButton((SDL_GameControllerButton)b), now[b] ? "down" : "up");
+    if (now[SDL_CONTROLLER_BUTTON_BACK] && KP_EDGE(SDL_CONTROLLER_BUTTON_X)) {
+        g_kp_open = !g_kp_open;
+        if (g_kp_open) g_kp_sel = 0;
+        fprintf(stderr, "[padkeys] keypad %s\n", g_kp_open ? "open" : "closed");
+    } else if (g_kp_open) {
+        int sel = g_kp_sel, row = sel < 12 ? sel / 3 : 4, col = sel < 12 ? sel % 3 : 1;
+        if (KP_EDGE(SDL_CONTROLLER_BUTTON_DPAD_LEFT) && row < 4) col = (col + 2) % 3;
+        if (KP_EDGE(SDL_CONTROLLER_BUTTON_DPAD_RIGHT) && row < 4) col = (col + 1) % 3;
+        if (KP_EDGE(SDL_CONTROLLER_BUTTON_DPAD_UP)) row = (row + 4) % 5;
+        if (KP_EDGE(SDL_CONTROLLER_BUTTON_DPAD_DOWN)) row = (row + 1) % 5;
+        g_kp_sel = row == 4 ? 12 : row * 3 + col;
+        if (KP_EDGE(SDL_CONTROLLER_BUTTON_A)) kp_press(g_kp_sel);
+        if (KP_EDGE(SDL_CONTROLLER_BUTTON_B)) g_kp_open = 0;
+    }
+#undef KP_EDGE
+    memcpy(prev, now, sizeof prev);
+    return g_kp_open;
+}
+
 int hle_pad_virtual_joy(int32_t ax[8], uint8_t bt[32], uint32_t pov[4]) {
     if (g_enabled <= 0 || !g_npads || !g_pad[0]) return 0;
+    if (g_kp_open) {                     /* keypad open: the game's joystick is neutral */
+        memset(ax, 0, 8 * sizeof *ax); memset(bt, 0, 32);
+        for (int i = 0; i < 4; i++) pov[i] = 0xFFFFFFFFu;
+        return 1;
+    }
     if (!g_act_ready) padmap_init();
     force_actions();
     SDL_GameController *c = g_pad[0];
@@ -372,13 +426,15 @@ void nfs5_pad_poll(void) {
     if (!g_npads) return;
     /* timeline drives the virtual controller for headless verification */
     if (g_ntl) {
-        uint32_t now = hle_ticks_ms();
+        uint32_t now = SDL_GetTicks();       /* timeline times are ms since start (hle_ticks_ms is since boot) */
         while (g_tl_idx < g_ntl && now >= g_tl[g_tl_idx].at) {
             tl_ev *e = &g_tl[g_tl_idx++];
             SDL_GameController *c = g_pad[0];
             if (!c) continue;
             SDL_Joystick *vj = SDL_GameControllerGetJoystick(c);
             if (!vj) continue;
+            if (getenv("NFS5_PAD_DEBUG"))
+                fprintf(stderr, "[padkeys] timeline t=%u kind=%d idx=%d val=%d\n", now, e->kind, e->idx, e->val);
             if (e->kind == 0) SDL_JoystickSetVirtualButton(vj, (int)e->idx, (Uint8)e->val);
             else if (e->kind == 1) SDL_JoystickSetVirtualHat(vj, (int)e->idx, (Uint8)e->val);
             else SDL_JoystickSetVirtualAxis(vj, (int)e->idx, (Sint16)e->val);
@@ -386,6 +442,7 @@ void nfs5_pad_poll(void) {
     }
     SDL_GameController *c = g_pad[0];
     SDL_GameControllerUpdate();
+    if (keypad_poll(c)) return;          /* the on-screen keypad owns the pad while open */
     /* hats / d-pad */
     for (int dir = 0; dir < 4; dir++) {
         SDL_GameControllerButton b = (SDL_GameControllerButton)(SDL_CONTROLLER_BUTTON_DPAD_UP + dir);
@@ -421,7 +478,6 @@ void nfs5_pad_poll(void) {
     map[nmap++] = (typeof(map[0])){ SDL_CONTROLLER_BUTTON_A, VK_RETURN_, 0x1C };
     map[nmap++] = (typeof(map[0])){ SDL_CONTROLLER_BUTTON_B, VK_ESCAPE_, 0x01 };
     map[nmap++] = (typeof(map[0])){ g_act[ACT_PAUSE], VK_ESCAPE_, 0x01 };
-    map[nmap++] = (typeof(map[0])){ SDL_CONTROLLER_BUTTON_BACK, VK_F1_, 0x3B };
     map[nmap++] = (typeof(map[0])){ g_act[ACT_CAMERA], 'C', 0x2E };
     map[nmap++] = (typeof(map[0])){ g_act[ACT_HANDBRAKE], VK_SPACE_, 0x39 };
     map[nmap++] = (typeof(map[0])){ g_act[ACT_HORN], 'H', 0x23 };
@@ -429,6 +485,20 @@ void nfs5_pad_poll(void) {
         map[nmap++] = (typeof(map[0])){ g_act[ACT_THROTTLE], VK_UP_, 0x48 };
     if (g_act[ACT_BRAKE] < SDL_CONTROLLER_BUTTON_DPAD_UP)
         map[nmap++] = (typeof(map[0])){ g_act[ACT_BRAKE], VK_DOWN_, 0x50 };
+    {   /* Select alone is F1 (the game's pause menu), sent as a tap on release so
+         * Select + X (the keypad) does not also open it */
+        static int back_held, back_combo;
+        int back = SDL_GameControllerGetButton(c, SDL_CONTROLLER_BUTTON_BACK) != 0;
+        if (back) {
+            for (int b = 0; b < SDL_CONTROLLER_BUTTON_MAX; b++)
+                if (b != SDL_CONTROLLER_BUTTON_BACK && SDL_GameControllerGetButton(c, (SDL_GameControllerButton)b))
+                    back_combo = 1;
+        } else if (back_held) {
+            if (!back_combo) { hle_input_key(1, VK_F1_, 0x3B); hle_input_key(0, VK_F1_, 0x3B); }
+            back_combo = 0;
+        }
+        back_held = back;
+    }
     static uint8_t prev[12];
     for (int i = 0; i < nmap; i++) {
         int on = SDL_GameControllerGetButton(c, (SDL_GameControllerButton)map[i].b) != 0;

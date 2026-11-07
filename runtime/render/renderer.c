@@ -940,6 +940,54 @@ static void fps_overlay(int fps, int height) {
             }
     glDisable(GL_SCISSOR_TEST);
 }
+/* On-screen keypad (win32hle padkeys.c, Select + X): drawn over the frame,
+ * bottom-right, with scissored clears like the FPS counter. */
+static void kp_rect(int x, int y, int w, int h, int wh, float r, float g, float b) {
+    glScissor(x, wh - y - h, w, h);
+    glClearColor(r, g, b, 1);
+    glClear(GL_COLOR_BUFFER_BIT);
+}
+static void kp_glyph(char ch, int x, int y, int px, int wh) {
+    static const struct { char c; uint8_t rows[7]; } font[] = {
+        {'0', {0x0E, 0x11, 0x13, 0x15, 0x19, 0x11, 0x0E}}, {'1', {0x04, 0x0C, 0x04, 0x04, 0x04, 0x04, 0x0E}},
+        {'2', {0x0E, 0x11, 0x01, 0x02, 0x04, 0x08, 0x1F}}, {'3', {0x1F, 0x02, 0x04, 0x02, 0x01, 0x11, 0x0E}},
+        {'4', {0x02, 0x06, 0x0A, 0x12, 0x1F, 0x02, 0x02}}, {'5', {0x1F, 0x10, 0x1E, 0x01, 0x01, 0x11, 0x0E}},
+        {'6', {0x06, 0x08, 0x10, 0x1E, 0x11, 0x11, 0x0E}}, {'7', {0x1F, 0x01, 0x02, 0x04, 0x08, 0x08, 0x08}},
+        {'8', {0x0E, 0x11, 0x11, 0x0E, 0x11, 0x11, 0x0E}}, {'9', {0x0E, 0x11, 0x11, 0x0F, 0x01, 0x02, 0x0C}},
+        {'.', {0, 0, 0, 0, 0, 0x0C, 0x0C}},               {'D', {0x1E, 0x11, 0x11, 0x11, 0x11, 0x11, 0x1E}},
+        {'E', {0x1F, 0x10, 0x10, 0x1E, 0x10, 0x10, 0x1F}}, {'L', {0x10, 0x10, 0x10, 0x10, 0x10, 0x10, 0x1F}},
+        {'O', {0x0E, 0x11, 0x11, 0x11, 0x11, 0x11, 0x0E}}, {'K', {0x11, 0x12, 0x14, 0x18, 0x14, 0x12, 0x11}},
+    };
+    for (size_t i = 0; i < sizeof font / sizeof font[0]; i++) {
+        if (font[i].c != ch) continue;
+        for (int r = 0; r < 7; r++)
+            for (int c = 0; c < 5; c++)
+                if (font[i].rows[r] & (0x10 >> c)) kp_rect(x + c * px, y + r * px, px, px, wh, 1, 1, 1);
+        return;
+    }
+}
+static void kp_label(const char *t, int cx, int cy, int px, int wh) {
+    int n = (int)strlen(t), w = n * 6 * px - px;
+    for (int i = 0; i < n; i++) kp_glyph(t[i], cx - w / 2 + i * 6 * px, cy - 7 * px / 2, px, wh);
+}
+static void keypad_overlay(int sel, int ww, int wh) {
+    static const char *keys[12] = {"1", "2", "3", "4", "5", "6", "7", "8", "9", ".", "0", "DEL"};
+    int s1 = wh >= 480 ? wh / 480 : 1;                    /* whole-pixel scale */
+    int cw = 64 * s1, ch = 40 * s1, gap = 6 * s1, px = 3 * s1;
+    int pw = 3 * cw + 4 * gap, ph = 5 * ch + 6 * gap;
+    int x0 = ww - pw - 8 * s1, y0 = wh - ph - 8 * s1;
+    glEnable(GL_SCISSOR_TEST);
+    kp_rect(x0, y0, pw, ph, wh, 0.05f, 0.05f, 0.06f);
+    for (int i = 0; i < 13; i++) {
+        int row = i < 12 ? i / 3 : 4, col = i < 12 ? i % 3 : 0;
+        int x = x0 + gap + col * (cw + gap), y = y0 + gap + row * (ch + gap);
+        int w = i < 12 ? cw : 3 * cw + 2 * gap;
+        if (i == sel) kp_rect(x, y, w, ch, wh, 0.84f, 0.0f, 0.11f);
+        else kp_rect(x, y, w, ch, wh, 0.24f, 0.24f, 0.26f);
+        kp_label(i < 12 ? keys[i] : "OK", x + w / 2, y + ch / 2, px, wh);
+    }
+    glDisable(GL_SCISSOR_TEST);
+}
 static int read_target(Target *t, void *p, int w, int h, int packed) {
     if (!t->fbo || !p || w <= 0 || h <= 0 || w > t->w || h > t->h)
         return 0;
@@ -987,6 +1035,11 @@ static void gl_present(int ww, int wh, int stretch, int fps) {
     copy_texture(gpu.front.color, 0, (ww - w) / 2, (wh - h) / 2, w, h, 1);
     if (fps >= 0)
         fps_overlay(fps, wh);
+    {
+        extern int hle_keypad_state(int *sel) __attribute__((weak));
+        int sel = 0;
+        if (hle_keypad_state && hle_keypad_state(&sel)) keypad_overlay(sel, ww, wh);
+    }
     uint64_t ts0 = rnow_ns();
     gles_ctx_swap();
     g_r_swap_ns += rnow_ns() - ts0;
