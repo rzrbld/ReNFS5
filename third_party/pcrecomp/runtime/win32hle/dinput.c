@@ -225,15 +225,38 @@ static int sdl_ready(void) {
     g_sdl_ready = 1;
     return 1;
 }
+/* NFS5_PAD_ONLY=vvvv:pppp (hex USB vendor:product): use only that joystick.
+ * Under PortMaster, gptokeyb's xbox360 mode turns whatever controller the
+ * device has into one virtual Xbox 360 pad (045e:028e); the game reads that
+ * and ignores the physical pad (no doubled input, same layout everywhere). */
+int hle_pad_allowed(int index) {
+    static int only = -1;
+    static unsigned vid, pid;
+    if (only < 0) {
+        const char *v = getenv("NFS5_PAD_ONLY");
+        only = v && sscanf(v, "%x:%x", &vid, &pid) == 2;
+        if (only) fprintf(stderr, "[dinput] only joystick %04x:%04x is used\n", vid, pid);
+    }
+    if (!only) return 1;
+    return SDL_JoystickGetDeviceVendor(index) == (Uint16)vid && SDL_JoystickGetDeviceProduct(index) == (Uint16)pid;
+}
+static int pad_index(int ordinal) {            /* the ordinal-th allowed SDL joystick */
+    int n = SDL_NumJoysticks(), k = 0;
+    for (int i = 0; i < n; i++)
+        if (hle_pad_allowed(i) && k++ == ordinal) return i;
+    return -1;
+}
 static int pad_count(void) {
     sdl_ready();
-    return SDL_NumJoysticks();
+    int n = SDL_NumJoysticks(), k = 0;
+    for (int i = 0; i < n; i++) k += hle_pad_allowed(i);
+    return k;
 }
 static SDL_Joystick *pad_get(didev_t *d) {
     if (d->pad && SDL_JoystickGetAttached(d->pad)) return d->pad;
     if (d->pad) { SDL_JoystickClose(d->pad); d->pad = NULL; }
     if (d->ordinal < 0 || d->ordinal >= pad_count()) return NULL;
-    d->pad = SDL_JoystickOpen(d->ordinal);
+    d->pad = SDL_JoystickOpen(pad_index(d->ordinal));
     if (!d->pad) DITRACE("SDL_JoystickOpen(%d): %s\n", d->ordinal, SDL_GetError());
     return d->pad;
 }

@@ -3,9 +3,9 @@
 #
 # Follows the PortMaster port template (as e.g. the doom3 port does): the
 # firmware's PortMaster control/mod scripts handle frontend handover, input
-# focus and cleanup, gptokeyb provides the Start+Select quit, and SDL picks
-# the video and audio drivers. Starts the native launcher (verify/import +
-# settings), then the game.
+# focus and cleanup, gptokeyb (xbox360 mode) is the controller layer and the
+# Start+Select quit, and SDL picks the video and audio drivers. Starts the
+# native launcher (verify/import + settings), then the game.
 #
 # Set NFS5_ROOT to use a non-standard payload directory.
 
@@ -141,6 +141,10 @@ nfs5_finish() {
         $ESUDO kill -9 "$(pidof gptokeyb)" 2>/dev/null || true
     fi
     if declare -F nfs5_cpu_restore >/dev/null; then nfs5_cpu_restore; fi
+    if [ "${nfs5_panel_swapped:-0}" = 1 ]; then
+        one_panel_restore          # the top panel back on
+        one_panel_dark top         # and BananaOS's state for a port, which run-port then undoes
+    fi
     if [ "$nfs5_game_started" = 1 ] && declare -F pm_finish >/dev/null; then pm_finish || true; fi
     return "$rc"
 }
@@ -170,10 +174,38 @@ esac
 # shellcheck disable=SC1090
 source "$GAMEDIR/nfs5-env.sh" || exit 1
 nfs5_game_started=1
-# The game reads the gamepad itself (SDL); without -c gptokeyb is only the
-# Start+Select quit tool (PortMaster packaging guide).
+# GAME SCREEN (launcher setting, dual-screen handhelds): the display connector
+# the game draws on. SDL_KMSDRM_FIRST is how BananaOS's SDL picks the panel
+# (run-port sets it for every port); BananaOS lights only the panel a port
+# uses, so for its bottom panel (DSI-1) swap which one is lit with its own
+# one-panel helper and put that back on exit.
+nfs5_panel_swapped=0
+if [ -n "${NFS5_SCREEN:-}" ]; then
+    export SDL_KMSDRM_FIRST="$NFS5_SCREEN"
+    echo "[nfs5] game screen: $NFS5_SCREEN"
+    if [ "${CFW_NAME:-}" = BananaOS ] && [ "$NFS5_SCREEN" = DSI-1 ] && [ -f /usr/libexec/banana/one-panel ]; then
+        # shellcheck disable=SC1091
+        . /usr/libexec/banana/one-panel
+        one_panel_dark top; one_panel_restore    # the bottom panel on (run-port turned it off)
+        one_panel_dark bottom                    # the top one off while the game runs
+        nfs5_panel_swapped=1
+    fi
+fi
+# Controls: gptokeyb (PortMaster's per-device controller layer) turns the
+# device's controller into one virtual Xbox 360 pad, which the game uses
+# instead of the physical one; it also provides the Start+Select quit.
 if [ -n "${GPTOKEYB:-}" ]; then
-    $GPTOKEYB "nfs5.aarch64" &
+    $GPTOKEYB "nfs5.aarch64" xbox360 &
+    for _ in $(seq 1 30); do
+        grep -q 'X-Box 360' /proc/bus/input/devices 2>/dev/null && break
+        sleep 0.1
+    done
+    if grep -q 'X-Box 360' /proc/bus/input/devices 2>/dev/null; then
+        export NFS5_PAD_ONLY=045e:028e
+        echo "[nfs5] using gptokeyb's virtual Xbox 360 pad"
+    else
+        echo "[nfs5] gptokeyb virtual pad not found; using the device's controller directly"
+    fi
 fi
 if declare -F pm_platform_helper >/dev/null; then
     pm_platform_helper "$GAMEDIR/nfs5.aarch64"

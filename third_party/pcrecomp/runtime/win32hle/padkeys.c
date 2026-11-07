@@ -355,6 +355,10 @@ void nfs5_pad_poll(void) {
         int n = SDL_NumJoysticks();
         for (int i = 0; i < n && g_npads < MAX_PADS; i++) {
             if (force_virtual && i != g_virtual_index) continue;
+            {
+                extern int hle_pad_allowed(int index);
+                if (!hle_pad_allowed(i)) continue;   /* NFS5_PAD_ONLY: gptokeyb's virtual pad */
+            }
             if (!SDL_IsGameController(i)) continue;
             SDL_GameController *c = SDL_GameControllerOpen(i);
             if (!c) continue;

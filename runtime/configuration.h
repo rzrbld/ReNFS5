@@ -45,6 +45,7 @@ typedef struct {
     int resolution;  /* NFS5_RES_* */
     int movies;      /* 1 = play EA-MAD movies in-process, 0 = skip them */
     int aspect;      /* NFS5_ASPECT_* */
+    char screen[16]; /* "" = the firmware's default, else a display connector (e.g. "DSI-1") */
 } Nfs5Settings;
 
 void nfs5_settings_defaults(Nfs5Settings *s);

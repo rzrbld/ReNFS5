@@ -104,6 +104,16 @@ int nfs5_settings_load(const char *config_dir, Nfs5Settings *s) {
             if (!strcmp(val, "on") || !strcmp(val, "1")) candidate.movies = 1;
             else if (!strcmp(val, "off") || !strcmp(val, "0")) candidate.movies = 0;
             else { ok = 0; break; }
+        } else if (!strcmp(key, "screen")) {
+            /* "default" or a DRM connector name such as DSI-1 */
+            size_t n = strlen(val);
+            if (!strcmp(val, "default") || n == 0) { candidate.screen[0] = 0; continue; }
+            if (n >= sizeof candidate.screen) { ok = 0; break; }
+            for (size_t i = 0; i < n; i++)
+                if (!((val[i] >= 'A' && val[i] <= 'Z') || (val[i] >= 'a' && val[i] <= 'z') ||
+                      (val[i] >= '0' && val[i] <= '9') || val[i] == '-' || val[i] == '_')) { ok = 0; break; }
+            if (!ok) break;
+            memcpy(candidate.screen, val, n + 1);
         } else if (!strcmp(key, "aspect")) {
             if (!strcmp(val, "4:3")) candidate.aspect = NFS5_ASPECT_4_3;
             else if (!strcmp(val, "stretch")) candidate.aspect = NFS5_ASPECT_STRETCH;
@@ -140,12 +150,13 @@ int nfs5_settings_save(const char *config_dir, const Nfs5Settings *s) {
     fprintf(f,
             "# NFS5 port settings (written by nfs5-launcher; safe to edit)\n"
             "# frame_cap: 30 | 60 | 0 (uncapped). 30 is recommended on H700.\n"
-            "frame_cap=%s\nfps_counter=%d\ndetail=%s\nresolution=%s\nmovies=%s\naspect=%s\n",
+            "frame_cap=%s\nfps_counter=%d\ndetail=%s\nresolution=%s\nmovies=%s\naspect=%s\nscreen=%s\n",
             frame_cap_text(s->frame_cap), s->fps_counter,
             s->detail == NFS5_DETAIL_LOW ? "low" : s->detail == NFS5_DETAIL_HIGH ? "high" : "medium",
             nfs5_resolution_name(s->resolution),
             s->movies ? "on" : "off",
-            s->aspect == NFS5_ASPECT_STRETCH ? "stretch" : "4:3");
+            s->aspect == NFS5_ASPECT_STRETCH ? "stretch" : "4:3",
+            s->screen[0] ? s->screen : "default");
     int failed = fflush(f) != 0;
     if (!failed && fsync(fileno(f))) failed = 1;
     if (fclose(f)) failed = 1;

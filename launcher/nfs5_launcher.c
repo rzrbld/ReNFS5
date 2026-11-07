@@ -660,10 +660,45 @@ static int interrupted = 0;
 static int toast_frames = 0;
 
 static int pad_page_count(void) { return NFS5_ACTION_COUNT + 2; }
-/* Settings page rows, top to bottom. */
-enum { ROW_FRAME_CAP, ROW_FPS, ROW_RESOLUTION, ROW_ASPECT, ROW_MOVIES, ROW_PADMAP, ROW_INSTALLED,
-       ROW_LAUNCH, ROW_EXIT, ROW_COUNT };
+/* Settings page rows, top to bottom. GAME SCREEN only shows on handhelds with
+ * more than one connected display. */
+enum { ROW_FRAME_CAP, ROW_FPS, ROW_RESOLUTION, ROW_ASPECT, ROW_MOVIES, ROW_SCREEN, ROW_PADMAP,
+       ROW_INSTALLED, ROW_LAUNCH, ROW_EXIT, ROW_COUNT };
 static int settings_page_count(void) { return ROW_COUNT; }
+
+/* Connected display connectors (DRM, e.g. DSI-1 / DSI-2), by name. */
+#define MAX_SCREENS 4
+static char g_screens[MAX_SCREENS][16];
+static int g_nscreens = -1;
+static void scan_screens(void) {
+    g_nscreens = 0;
+    for (int card = 0; card < 4; card++) {
+        static const char *kinds[] = {"DSI", "eDP", "HDMI-A", "DP", "LVDS", "VGA", "DPI", "Composite"};
+        for (size_t k = 0; k < sizeof kinds / sizeof kinds[0]; k++)
+            for (int n = 1; n <= 4 && g_nscreens < MAX_SCREENS; n++) {
+                char path[96], st[32] = "";
+                snprintf(path, sizeof path, "/sys/class/drm/card%d-%s-%d/status", card, kinds[k], n);
+                FILE *f = fopen(path, "r");
+                if (!f) continue;
+                if (fgets(st, sizeof st, f) && !strncmp(st, "connected", 9)) {
+                    char name[16];
+                    snprintf(name, sizeof name, "%s-%d", kinds[k], n);
+                    int dup = 0;
+                    for (int i = 0; i < g_nscreens; i++) dup |= !strcmp(g_screens[i], name);
+                    if (!dup) snprintf(g_screens[g_nscreens++], sizeof g_screens[0], "%s", name);
+                }
+                fclose(f);
+            }
+    }
+}
+static int screen_row_shown(void) {
+    if (g_nscreens < 0) scan_screens();
+    return g_nscreens > 1 || g_settings.screen[0];   /* a saved choice stays editable */
+}
+static void move_selection(int dir) {
+    do selection = (selection + dir + ROW_COUNT) % ROW_COUNT;
+    while (selection == ROW_SCREEN && !screen_row_shown());
+}
 static void enter_settings(void) {
     load_persistent();
     selection = 0;
@@ -798,13 +833,16 @@ static void draw_settings_page(SDL_Renderer *ren) {
     SDL_Color normal = COL_TEXT, hot = COL_BRIGHT;
     int y = 124;
     int step = 30;
+    int shown = screen_row_shown();
+    /* rows below GAME SCREEN move up when it is hidden */
 #define ROW(r, label, value, gap, n, h) \
-    draw_row(ren, label, value, y + (r) * step + (gap), selection == (r), n, h)
+    draw_row(ren, label, value, y + ((r) - (!shown && (r) > ROW_SCREEN)) * step + (gap), selection == (r), n, h)
     ROW(ROW_FRAME_CAP, "FRAME CAP", frame_cap_label(g_settings.frame_cap), 0, normal, hot);
     ROW(ROW_FPS, "FPS COUNTER", g_settings.fps_counter ? "ON" : "OFF", 0, normal, hot);
     ROW(ROW_RESOLUTION, "RESOLUTION", nfs5_resolution_name(g_settings.resolution), 0, normal, hot);
     ROW(ROW_ASPECT, "ASPECT", nfs5_aspect_name(g_settings.aspect), 0, normal, hot);
     ROW(ROW_MOVIES, "MOVIES", nfs5_movies_name(g_settings.movies), 0, normal, hot);
+    if (shown) ROW(ROW_SCREEN, "GAME SCREEN", g_settings.screen[0] ? g_settings.screen : "DEFAULT", 0, normal, hot);
     ROW(ROW_PADMAP, "CONTROLLER MAPPING", "EDIT >", 0, normal, hot);
     ROW(ROW_INSTALLED, "INSTALLED GAME", g_data_verified ? "VERIFIED" : "CHECK >", 0, normal, hot);
     ROW(ROW_LAUNCH, "SAVE & LAUNCH", "", 6, hot, hot);
@@ -891,6 +929,16 @@ static void change_setting(int dir) {
         case ROW_MOVIES:
             g_settings.movies = !g_settings.movies;
             break;
+        case ROW_SCREEN: {      /* DEFAULT, then each connected display by name */
+            if (g_nscreens < 0) scan_screens();
+            int cur = -1, n = g_nscreens + 1;
+            for (int i = 0; i < g_nscreens; i++)
+                if (!strcmp(g_settings.screen, g_screens[i])) cur = i;
+            int next = ((cur + 1) + (dir > 0 ? 1 : n - 1)) % n - 1;   /* -1 = DEFAULT */
+            if (next < 0) g_settings.screen[0] = 0;
+            else snprintf(g_settings.screen, sizeof g_settings.screen, "%s", g_screens[next]);
+            break;
+        }
         default: break;
     }
 }
@@ -1205,8 +1253,8 @@ sdl_ready:;
                         running = 0;
                     }
                 } else if (page == PAGE_SETTINGS) {
-                    if (k == SDLK_UP) selection = (selection + settings_page_count() - 1) % settings_page_count();
-                    else if (k == SDLK_DOWN) selection = (selection + 1) % settings_page_count();
+                    if (k == SDLK_UP) move_selection(-1);
+                    else if (k == SDLK_DOWN) move_selection(1);
                     else if (k == SDLK_LEFT) change_setting(-1);
                     else if (k == SDLK_RIGHT) change_setting(1);
                     else if (k == SDLK_RETURN || k == SDLK_SPACE) {
@@ -1254,8 +1302,8 @@ sdl_ready:;
                         running = 0;
                     }
                 } else if (page == PAGE_SETTINGS) {
-                    if (b == SDL_CONTROLLER_BUTTON_DPAD_UP) selection = (selection + settings_page_count() - 1) % settings_page_count();
-                    else if (b == SDL_CONTROLLER_BUTTON_DPAD_DOWN) selection = (selection + 1) % settings_page_count();
+                    if (b == SDL_CONTROLLER_BUTTON_DPAD_UP) move_selection(-1);
+                    else if (b == SDL_CONTROLLER_BUTTON_DPAD_DOWN) move_selection(1);
                     else if (b == SDL_CONTROLLER_BUTTON_DPAD_LEFT) change_setting(-1);
                     else if (b == SDL_CONTROLLER_BUTTON_DPAD_RIGHT) change_setting(1);
                     else if (b == SDL_CONTROLLER_BUTTON_A) {
@@ -1299,7 +1347,7 @@ sdl_ready:;
                 if (capture_action < 0 && now - last_axis > 200 && (v < -20000 || v > 20000)) {
                     int dir = v < 0 ? -1 : 1;
                     if (page == PAGE_SETTINGS && ev.caxis.axis == SDL_CONTROLLER_AXIS_LEFTY)
-                        selection = (selection + dir + settings_page_count()) % settings_page_count();
+                        move_selection(dir);
                     else if (page == PAGE_PADMAP && ev.caxis.axis == SDL_CONTROLLER_AXIS_LEFTY)
                         pad_selection = (pad_selection + dir + pad_page_count()) % pad_page_count();
                     last_axis = now;

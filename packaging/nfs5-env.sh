@@ -45,6 +45,12 @@ export NFS5_FULLSCREEN=${NFS5_FULLSCREEN:-1}
 export SDL_JOYSTICK_ALLOW_BACKGROUND_EVENTS=${SDL_JOYSTICK_ALLOW_BACKGROUND_EVENTS:-1}
 # (the old launcher DETAIL setting is ignored: rendering always uses the
 # game's own filtering; NFS5_DETAIL=low|high remains a developer switch)
+v=$(nfs5_setting screen)
+case "$v" in
+    ''|default) ;;
+    *[!A-Za-z0-9_-]*) ;;
+    *) export NFS5_SCREEN=${NFS5_SCREEN:-$v} ;;
+esac
 v=$(nfs5_setting movies)
 case "$v" in
     on|1) export NFS5_PLAY_MOVIES=${NFS5_PLAY_MOVIES:-1}; export NFS5_SKIP_MOVIES=${NFS5_SKIP_MOVIES:-0} ;;
