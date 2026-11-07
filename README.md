@@ -27,13 +27,17 @@ must first be installed on a PC. The translated executable pair is v3.2;
 other versions are unverified and can be refused with `NFS5_STRICT_VERSION=1`.
 
 Recommended starting settings: **640×480, 30 FPS cap, 4:3**.
-The launcher includes **FPS COUNTER ON/OFF**, movies and controller mapping.
+The launcher includes **FPS COUNTER ON/OFF**, movies and controller mapping;
+on handhelds with two screens, **GAME SCREEN** picks the display the game uses
+(e.g. DSI-1 / DSI-2). In the game, **Start + Select** quits.
 D-pad selects an option, Left/Right changes it, A confirms and B exits.
 
 Requires AArch64 firmware, glibc 2.36+, Bash, SDL2, SDL2_ttf and an OpenGL ES
 3.x driver that SDL2 can load. The game links no GPU library: every GLES call
 is resolved through the firmware's SDL2, so it uses the driver SDL2 already
-uses. Tested on H700 (Mali-G31); other drivers are untested.
+uses. A PortMaster port: it uses the firmware's PortMaster for controls
+(gptokeyb) and launch handling. Tested on muOS (RG40XX-H, H700, Mali) and
+BananaOS (RG DS, RK3568, Mesa Panfrost); other firmwares are untested.
 
 ## Saves and settings
 

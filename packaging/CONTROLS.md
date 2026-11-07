@@ -3,6 +3,10 @@
 Use the D-pad to select launcher options, Left/Right to change them, A to
 confirm, and B to return or exit. Controller mapping is available in settings.
 
+In the game the controller goes through PortMaster's gptokeyb, which presents
+your device's buttons as a standard Xbox 360 pad, so the layout below is the
+same on every handheld PortMaster supports. **Start + Select quits** the game.
+
 ## In the race (default mapping)
 
 | Action | Button |
