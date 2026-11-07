@@ -374,34 +374,70 @@ static void k_InterlockedCompareExchange(void) { RET(__sync_val_compare_and_swap
 typedef struct { int manual, signaled; } hevent;
 typedef struct { uint32_t owner, count; } hmutex;
 typedef struct { int32_t count, max; } hsem;
-typedef struct { char name[128]; uint32_t h; } named_t;
-static named_t g_named[64];
+/* Named objects: one namespace for all types, as on Windows (and Wine).
+ * An entry holds the object itself, not a handle: every Create/Open of the
+ * name gets its own handle, and the object goes when its last handle closes
+ * (the entry is then stale and dropped on the next lookup). */
+typedef struct { char name[128]; int type; void *obj; } named_t;
+static named_t g_named[256];
 
-static uint32_t named_find(const char *name) {
-    for (int i = 0; name && i < 64; i++) if (g_named[i].h && !strcmp(g_named[i].name, name)) return g_named[i].h;
-    return 0;
+void *hle_named_lookup(const char *name, int *type) {
+    if (!name || !*name) return NULL;
+    for (int i = 0; i < 256; i++)
+        if (g_named[i].obj && !strcmp(g_named[i].name, name)) {
+            if (!hle_handle_obj_alive(g_named[i].obj)) { g_named[i].obj = NULL; continue; }
+            if (type) *type = g_named[i].type;
+            return g_named[i].obj;
+        }
+    return NULL;
 }
-static void named_add(const char *name, uint32_t h) {
-    for (int i = 0; name && i < 64; i++) if (!g_named[i].h) { snprintf(g_named[i].name, sizeof g_named[i].name, "%s", name); g_named[i].h = h; return; }
+void hle_named_add(const char *name, int type, void *obj) {
+    if (!name || !*name || !obj) return;
+    for (int i = 0; i < 256; i++)
+        if (!g_named[i].obj || !hle_handle_obj_alive(g_named[i].obj)) {
+            snprintf(g_named[i].name, sizeof g_named[i].name, "%s", name);
+            g_named[i].type = type, g_named[i].obj = obj;
+            return;
+        }
+}
+uint32_t hle_named_open(const char *name, int type) {
+    int t = 0;
+    void *obj = hle_named_lookup(name, &t);
+    if (!obj) { g_last_error = 2; return 0; }            /* ERROR_FILE_NOT_FOUND */
+    if (t != type) { g_last_error = 6; return 0; }       /* ERROR_INVALID_HANDLE: a name of another type */
+    uint32_t h = hle_handle_alloc(type, obj);
+    g_last_error = h ? 0 : 4;                            /* ERROR_TOO_MANY_OPEN_FILES */
+    return h;
+}
+/* Create* of a name that exists: a new handle to that object and
+ * ERROR_ALREADY_EXISTS; of another type: ERROR_INVALID_HANDLE. 0 = new name. */
+static int named_existing(const char *name, int type, uint32_t *h) {
+    int t = 0;
+    void *obj = hle_named_lookup(name, &t);
+    if (!obj) return 0;
+    if (t != type) { g_last_error = 6; *h = 0; return 1; }
+    *h = hle_handle_alloc(type, obj);
+    g_last_error = ERROR_ALREADY_EXISTS;
+    return 1;
 }
 static void free_obj(void *o) { free(o); }
 
 static void k_CreateEventA(void) {                       /* (sa, manual, initial, name) */
     static int closer;
     if (!closer) hle_handle_set_closer(HLE_H_EVENT, free_obj), closer = 1;
-    uint32_t h = named_find(ASTR(3));
-    if (h) { g_last_error = ERROR_ALREADY_EXISTS; RET(h, 4); }
+    uint32_t h;
+    if (named_existing(ASTR(3), HLE_H_EVENT, &h)) RET(h, 4);
     hevent *e = (hevent *)calloc(1, sizeof *e);
     e->manual = A32(1) != 0, e->signaled = A32(2) != 0;
     h = hle_handle_alloc(HLE_H_EVENT, e);
-    named_add(ASTR(3), h);
+    hle_named_add(ASTR(3), HLE_H_EVENT, e);
     g_last_error = 0;
     if (getenv("HLE_FILETRACE")) fprintf(stderr, "[ev] CreateEventA h=%#x manual=%d init=%d tid=%u from %#x\n",
                                         h, e->manual, e->signaled, hle_thread_id(), g_cur_func);
     RET(h, 4);
 }
 void hle_set_event(uint32_t h) { hevent *e = (hevent *)hle_handle_obj(h, HLE_H_EVENT); if (e) e->signaled = 1; }
-static void k_OpenEventA(void) { uint32_t h = named_find(ASTR(2)); if (!h) g_last_error = 2; RET(h, 3); }
+static void k_OpenEventA(void) { RET(hle_named_open(ASTR(2), HLE_H_EVENT), 3); }   /* (access, inherit, name) */
 static void k_SetEvent(void)   { hevent *e = (hevent *)hle_handle_obj(A32(0), HLE_H_EVENT);
     if (getenv("HLE_FILETRACE")) fprintf(stderr, "[ev] SetEvent h=%#x tid=%u from %#x\n", A32(0), hle_thread_id(), g_cur_func);
     if (e) e->signaled = 1; RET(e ? 1u : 0u, 1); }
@@ -411,20 +447,16 @@ static void k_PulseEvent(void) { hevent *e = (hevent *)hle_handle_obj(A32(0), HL
 static void k_CreateMutexA(void) {                       /* (sa, initialOwner, name) */
     static int closer;
     if (!closer) hle_handle_set_closer(HLE_H_MUTEX, free_obj), closer = 1;
-    uint32_t h = named_find(ASTR(2));
-    if (h) { g_last_error = ERROR_ALREADY_EXISTS; RET(h, 3); }
+    uint32_t h;
+    if (named_existing(ASTR(2), HLE_H_MUTEX, &h)) RET(h, 3);   /* existing: initialOwner is ignored, as on Windows */
     hmutex *m = (hmutex *)calloc(1, sizeof *m);
     if (A32(1)) m->owner = hle_thread_id(), m->count = 1;
     h = hle_handle_alloc(HLE_H_MUTEX, m);
-    named_add(ASTR(2), h);
+    hle_named_add(ASTR(2), HLE_H_MUTEX, m);
     g_last_error = 0;
     RET(h, 3);
 }
-static void k_OpenMutexA(void) {                         /* (access, inherit, name) */
-    uint32_t h = named_find(ASTR(2));
-    if (!h) g_last_error = 2;
-    RET(h, 3);
-}
+static void k_OpenMutexA(void) { RET(hle_named_open(ASTR(2), HLE_H_MUTEX), 3); }   /* (access, inherit, name) */
 static void k_ReleaseMutex(void) {
     hmutex *m = (hmutex *)hle_handle_obj(A32(0), HLE_H_MUTEX);
     if (!m || m->owner != hle_thread_id()) { g_last_error = 288u; RET(0, 1); }   /* ERROR_NOT_OWNER */
@@ -432,9 +464,16 @@ static void k_ReleaseMutex(void) {
     RET(1, 1);
 }
 static void k_CreateSemaphoreA(void) {                   /* (sa, initial, max, name) */
+    static int closer;
+    if (!closer) hle_handle_set_closer(HLE_H_SEMAPHORE, free_obj), closer = 1;
+    uint32_t h;
+    if (named_existing(ASTR(3), HLE_H_SEMAPHORE, &h)) RET(h, 4);
     hsem *s = (hsem *)calloc(1, sizeof *s);
     s->count = (int32_t)A32(1), s->max = (int32_t)A32(2);
-    RET(hle_handle_alloc(HLE_H_SEMAPHORE, s), 4);
+    h = hle_handle_alloc(HLE_H_SEMAPHORE, s);
+    hle_named_add(ASTR(3), HLE_H_SEMAPHORE, s);
+    g_last_error = 0;
+    RET(h, 4);
 }
 static void k_ReleaseSemaphore(void) {
     hsem *s = (hsem *)hle_handle_obj(A32(0), HLE_H_SEMAPHORE);
@@ -570,8 +609,8 @@ static void k_DebugBreak(void) {
 static void k_DisableThreadLibraryCalls(void) { RET(1, 1); }
 /* Named semaphores / file mappings: no named-object namespace here, so the
  * open fails as it does when the object does not exist. */
-static void k_OpenSemaphoreA(void) { hle_set_last_error(2u); RET(0, 3); }    /* ERROR_FILE_NOT_FOUND */
-static void k_OpenFileMappingA(void) { hle_set_last_error(2u); RET(0, 3); }
+static void k_OpenSemaphoreA(void) { RET(hle_named_open(ASTR(2), HLE_H_SEMAPHORE), 3); }    /* (access, inherit, name) */
+static void k_OpenFileMappingA(void) { RET(hle_named_open(ASTR(2), HLE_H_MAPPING), 3); }
 static void k_WaitForSingleObjectEx(void) { uint32_t h = A32(0); RET(hle_wait(1, &h, 0, A32(1)), 3); }
 static void k_WaitForMultipleObjects(void) {             /* (n, handles, all, timeout) */
     uint32_t n = A32(0), hs[64];

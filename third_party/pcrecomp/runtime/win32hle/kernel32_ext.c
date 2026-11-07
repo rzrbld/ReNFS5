@@ -814,6 +814,15 @@ static void k_CreateFileMappingA(void) {                 /* (hFile, sa, protect,
     uint32_t file = A32(0), protect = A32(2);
     uint64_t size = (uint64_t)A32(3) << 32 | A32(4);
     int fd = -1;
+    {   /* a name that exists: that mapping (ERROR_ALREADY_EXISTS), as on Windows */
+        int t = 0;
+        const char *name = A32(5) ? ASTR(5) : NULL;
+        if (hle_named_lookup(name, &t)) {
+            uint32_t h = t == HLE_H_MAPPING ? hle_named_open(name, HLE_H_MAPPING) : 0;
+            hle_set_last_error(h ? 183u : 6u);           /* ERROR_ALREADY_EXISTS / ERROR_INVALID_HANDLE */
+            RET(h, 6);
+        }
+    }
     if (file != INVALID_HANDLE) {
         int f = fd_of(file);
         struct stat st;
@@ -822,10 +831,15 @@ static void k_CreateFileMappingA(void) {                 /* (hFile, sa, protect,
         fd = dup(f);
     }
     if (!size) { hle_set_last_error(1006); RET(0, 6); }    /* ERROR_FILE_INVALID: an empty file */
+    if (fd < 0) {   /* pagefile-backed: shared memory, so every view of it sees the same bytes */
+        fd = memfd_create("hle-mapping", MFD_CLOEXEC);
+        if (fd >= 0 && ftruncate(fd, (off_t)size) != 0) { close(fd); fd = -1; }
+    }
     hmapping *m = (hmapping *)malloc(sizeof *m);
     m->fd = fd, m->size = size, m->writable = (protect & 0x0C) != 0;   /* PAGE_READWRITE | PAGE_WRITECOPY */
     uint32_t h = hle_handle_alloc(HLE_H_MAPPING, m);
     if (!h) { mapping_closer(m); RET(0, 6); }
+    if (A32(5)) hle_named_add(ASTR(5), HLE_H_MAPPING, m);
     if (hle_filetrace()) fprintf(stderr, "[file] CreateFileMappingA(file=%#x size=%llu) -> %#x from %#x\n",
                                  A32(0), (unsigned long long)size, h, g_cur_func);
     hle_set_last_error(0);

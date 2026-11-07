@@ -203,6 +203,15 @@ void    *hle_handle_obj(uint32_t h, int type);
 int      hle_handle_type(uint32_t h);
 int      hle_handle_close(uint32_t h);                /* 1 if it was a handle */
 void     hle_handle_set_closer(int type, void (*fn)(void *));
+int      hle_handle_obj_alive(const void *obj);       /* some handle still refers to obj */
+/* Named kernel objects (kernel32.c), one namespace as on Windows: events,
+ * mutexes, semaphores, file mappings. hle_named_lookup gives the object of
+ * that name (its type in *type) or NULL; hle_named_add records a new one;
+ * hle_named_open returns a new handle to it, or 0 with the Win32 error set
+ * (ERROR_FILE_NOT_FOUND, ERROR_INVALID_HANDLE for another type). */
+void    *hle_named_lookup(const char *name, int *type);
+void     hle_named_add(const char *name, int type, void *obj);
+uint32_t hle_named_open(const char *name, int type);
 
 /* ---- paths (hle_path.c) ----
  * Guest (Windows) paths to host paths: drive letters map to host directories

@@ -684,6 +684,13 @@ int hle_handle_close(uint32_t h) {
     int type = g_handle[i].type;
     void *obj = g_handle[i].obj;
     g_handle[i].type = 0, g_handle[i].obj = NULL;
-    if (type > 0 && type < 32 && g_closer[type]) g_closer[type](obj);
+    /* an object lives until its last handle is closed (a named object opened
+     * twice, DuplicateHandle): only then does the type's closer run */
+    if (type > 0 && type < 32 && g_closer[type] && !hle_handle_obj_alive(obj)) g_closer[type](obj);
     return 1;
+}
+int hle_handle_obj_alive(const void *obj) {
+    if (!obj) return 0;
+    for (int j = 1; j < MAX_HANDLES; j++) if (g_handle[j].type && g_handle[j].obj == obj) return 1;
+    return 0;
 }
