@@ -280,6 +280,18 @@ static void w_gethostbyname(void) {
     if (!he) he = (guest_hostent *)hle_alloc(sizeof *he);
     const char *name = ASTR(0);
     struct hostent *h = name ? gethostbyname(name) : NULL;
+    /* Windows resolves its own name to its adapters' addresses. Linux
+     * firmwares often map the hostname to loopback in /etc/hosts (BananaOS:
+     * banana = 127.0.1.1), and a game that looks itself up then decides there
+     * is no network (NFS5 greys out Internet and peer-to-peer IP). For the
+     * own name, a loopback-only answer falls through to the interfaces. */
+    char me[256];
+    if (h && h->h_addrtype == AF_INET && name && gethostname(me, sizeof me) == 0 && !strcasecmp(name, me)) {
+        int loop_only = 1;
+        for (int i = 0; h->h_addr_list[i]; i++)
+            if ((((const uint8_t *)h->h_addr_list[i])[0]) != 127) loop_only = 0;
+        if (loop_only) h = NULL;
+    }
     memset(he, 0, sizeof *he);
     he->name = hle_va(he->nm);
     he->aliases = hle_va(&he->none);
