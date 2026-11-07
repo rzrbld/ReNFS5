@@ -355,12 +355,97 @@ static void w_EnumProtocolsA(void) {
     RET(1, 3);
 }
 
+/* select: a Winsock fd_set is { u_int fd_count; SOCKET fd_array[64] } and a
+ * timeval two 32-bit longs. Done with poll(); on return each set holds only
+ * its ready sockets, as on Windows. Waiting gives the machine up. */
+#define WS_FD_SETSIZE 64u
+static void ws_set_take(uint32_t va, struct pollfd *p, uint32_t *owner, int *n, short ev, int which) {
+    if (!va) return;
+    uint32_t cnt = MEM32(va);
+    if (cnt > WS_FD_SETSIZE) cnt = WS_FD_SETSIZE;
+    for (uint32_t i = 0; i < cnt; i++) {
+        uint32_t sock = MEM32(va + 4 + 4 * i);
+        int fd = fd_of(sock), k;
+        for (k = 0; k < *n; k++) if (owner[k] == sock) break;
+        if (k == *n) {
+            if (*n >= (int)(3 * WS_FD_SETSIZE)) return;
+            p[k].fd = fd; p[k].events = 0; p[k].revents = 0; owner[k] = sock; (*n)++;
+        }
+        p[k].events |= ev;
+        (void)which;
+    }
+}
+static uint32_t ws_set_keep(uint32_t va, const struct pollfd *p, const uint32_t *owner, int n, short mask) {
+    if (!va) return 0;
+    uint32_t cnt = MEM32(va), out = 0;
+    if (cnt > WS_FD_SETSIZE) cnt = WS_FD_SETSIZE;
+    for (uint32_t i = 0; i < cnt; i++) {
+        uint32_t sock = MEM32(va + 4 + 4 * i);
+        for (int k = 0; k < n; k++)
+            if (owner[k] == sock && (p[k].revents & mask)) { MEM32(va + 4 + 4 * out++) = sock; break; }
+    }
+    MEM32(va) = out;
+    return out;
+}
+static void w_select(void) {                             /* (nfds, read, write, except, timeout) */
+    uint32_t rd = A32(1), wr = A32(2), ex = A32(3), tv = A32(4);
+    struct pollfd p[3 * WS_FD_SETSIZE];
+    uint32_t owner[3 * WS_FD_SETSIZE];
+    int n = 0;
+    ws_set_take(rd, p, owner, &n, POLLIN, 0);
+    ws_set_take(wr, p, owner, &n, POLLOUT, 1);
+    ws_set_take(ex, p, owner, &n, POLLPRI, 2);
+    for (int k = 0; k < n; k++)
+        if (p[k].fd < 0) { g_wsa_error = WSAENOTSOCK; RET(SOCKET_ERROR, 5); }
+    int ms = -1;
+    if (tv) {
+        int64_t sec = (int32_t)MEM32(tv), usec = (int32_t)MEM32(tv + 4);
+        int64_t t = sec * 1000 + usec / 1000;
+        ms = t < 0 ? 0 : t > 0x7fffffff ? 0x7fffffff : (int)t;
+    }
+    int r;
+    if (ms == 0) r = poll(p, (nfds_t)n, 0);
+    else { hle_block_begin(); r = poll(p, (nfds_t)n, ms); hle_block_end(); }
+    if (r < 0) FAIL(5);
+    uint32_t total = ws_set_keep(rd, p, owner, n, POLLIN | POLLHUP | POLLERR);
+    total += ws_set_keep(wr, p, owner, n, POLLOUT | POLLERR);
+    total += ws_set_keep(ex, p, owner, n, POLLPRI);
+    RET(total, 5);
+}
+static void w___WSAFDIsSet(void) {                       /* (SOCKET, fd_set *) */
+    uint32_t sock = A32(0), va = A32(1);
+    if (!va) RET(0, 2);
+    uint32_t cnt = MEM32(va);
+    if (cnt > WS_FD_SETSIZE) cnt = WS_FD_SETSIZE;
+    for (uint32_t i = 0; i < cnt; i++) if (MEM32(va + 4 + 4 * i) == sock) RET(1, 2);
+    RET(0, 2);
+}
+static void w_shutdown(void) {                           /* (s, how): SD_RECEIVE/SEND/BOTH = SHUT_* */
+    if (shutdown(fd_of(A32(0)), (int)A32(1)) != 0) FAIL(2);
+    RET(0, 2);
+}
+static void w_getpeername(void) {                        /* (s, addr, &len) */
+    struct sockaddr_in h;
+    socklen_t hl = sizeof h;
+    if (getpeername(fd_of(A32(0)), (struct sockaddr *)&h, &hl) != 0) FAIL(3);
+    uint8_t *g = APTR(1);
+    if (g && A32(2) && MEM32(A32(2)) >= 16) {
+        memset(g, 0, 16);
+        g[0] = AF_INET; g[1] = 0;
+        memcpy(g + 2, &h.sin_port, 2);
+        memcpy(g + 4, &h.sin_addr, 4);
+        MEM32(A32(2)) = 16;
+    }
+    RET(0, 3);
+}
+
 #define SHIM2(ord, name, fn) { "wsock32.dll#" #ord, fn }, { name, fn }
 const win32hle_shim win32hle_wsock32[] = {
     SHIM2(1111, "EnumProtocolsA", w_EnumProtocolsA),
     SHIM2(2, "bind", w_bind),
     SHIM2(3, "closesocket", w_closesocket),
     SHIM2(4, "connect", w_connect),
+    SHIM2(5, "getpeername", w_getpeername),
     SHIM2(6, "getsockname", w_getsockname),
     SHIM2(7, "getsockopt", w_getsockopt),
     SHIM2(8, "htonl", w_htonl),
@@ -373,9 +458,11 @@ const win32hle_shim win32hle_wsock32[] = {
     SHIM2(15, "ntohs", w_ntohs),
     SHIM2(16, "recv", w_recv),
     SHIM2(17, "recvfrom", w_recvfrom),
+    SHIM2(18, "select", w_select),
     SHIM2(19, "send", w_send),
     SHIM2(20, "sendto", w_sendto),
     SHIM2(21, "setsockopt", w_setsockopt),
+    SHIM2(22, "shutdown", w_shutdown),
     SHIM2(23, "socket", w_socket),
     SHIM2(52, "gethostbyname", w_gethostbyname),
     SHIM2(57, "gethostname", w_gethostname),
@@ -385,5 +472,6 @@ const win32hle_shim win32hle_wsock32[] = {
     SHIM2(112, "WSASetLastError", w_WSASetLastError),
     SHIM2(115, "WSAStartup", w_WSAStartup),
     SHIM2(116, "WSACleanup", w_WSACleanup),
+    SHIM2(151, "__WSAFDIsSet", w___WSAFDIsSet),
     { 0, 0 }
 };
