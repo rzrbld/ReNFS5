@@ -278,7 +278,9 @@ static void present(void) {
          * sleeping) keeps the guest loop out of the HLE's way and makes the
          * presented rate exact; the FPS overlay reflects it. */
         static uint32_t last_shown;
-        if (last_shown && now - last_shown < (uint32_t)g_cap_ms) return;
+        /* 2 ms slack: Flip paces the guest at exactly 1/cap, and a strict
+         * check would drift and drop a frame every second or two */
+        if (last_shown && now - last_shown + 2 < (uint32_t)g_cap_ms) return;
         last_shown = now;
     }
     int new_frame = seq != g_shown_seq;

@@ -114,29 +114,6 @@ static struct {
 } g_mmt[MAX_MMTIMERS];
 static uint32_t g_mmt_next = 1;   /* atomic: timeSetEvent runs on several threads */
 
-/* NFS5_FRAME_CAP: the game's frame clock is a one-shot timeSetEvent timer
- * (proc 0x564EB0) rescheduled every frame. Waiting before running that exact
- * callback paces the guest's frame loop at the requested rate, without
- * touching the timer values the game computes. */
-#define NFS5_FRAME_TIMER_PROC 0x564EB0u
-static void frame_cap_wait(uint32_t proc) {
-    static int ms = -1;
-    static uint32_t last;
-    if (proc != NFS5_FRAME_TIMER_PROC) return;
-    if (ms < 0) {
-        const char *v = getenv("NFS5_FRAME_CAP");
-        int cap = v && *v ? atoi(v) : 0;
-        ms = cap > 0 ? (1000 + cap - 1) / cap : 0;
-        if (ms) fprintf(stderr, "[winmm] frame cap %d fps (%d ms frame clock)\n", cap, ms);
-    }
-    if (ms <= 0) return;
-    uint32_t now = hle_ticks_ms();
-    if (last) {
-        int32_t wait = (int32_t)ms - (int32_t)(now - last);
-        if (wait > 0 && wait <= ms) usleep((useconds_t)wait * 1000u);
-    }
-    last = hle_ticks_ms();
-}
 static void mmtimer_fire(int i) {
     if (g_mmt[i].proc == 0x564EB0u && getenv("NFS5_FRAMECLOCK")) {
         static unsigned n; static uint32_t t0;
@@ -151,7 +128,6 @@ static void mmtimer_fire(int i) {
         hle_set_event(h);
         mach_leave();
     } else {
-        frame_cap_wait(g_mmt[i].proc);
         uint32_t a[5] = { g_mmt[i].id, 0, g_mmt[i].user, 0, 0 };
         hle_call_guest(g_mmt[i].proc, 5, a);
     }

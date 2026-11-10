@@ -827,6 +827,34 @@ static void sf_EnumAttachedSurfaces(void) {              /* (this, ctx, callback
     RET(DD_OK, 3);
 }
 static void sf_EnumOverlayZOrders(void) { RET(DD_OK, 4); }
+/* NFS5_FRAME_CAP (0/30/60): pace the guest's render loop at Flip. The game
+ * advances its simulation from its own ~128 Hz timer (winmm), so a slower
+ * render loop only means more simulation ticks per frame; game speed stays
+ * real time. (Gating that timer instead slowed the whole game down: at 30 the
+ * clock ran at ~30/128 of real time.) The sleep gives the machine up so the
+ * timer and audio threads keep running while the guest waits. */
+static void flip_frame_cap(void) {
+    static int64_t period_ns = -1, next_ns;
+    if (period_ns < 0) {
+        const char *v = getenv("NFS5_FRAME_CAP");
+        int cap = v && *v ? atoi(v) : 0;
+        period_ns = cap > 0 ? 1000000000LL / cap : 0;
+        if (period_ns) fprintf(stderr, "[ddraw] frame cap %d fps (paced at Flip)\n", cap);
+    }
+    if (!period_ns) return;
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    int64_t now = (int64_t)ts.tv_sec * 1000000000LL + ts.tv_nsec;
+    if (!next_ns || now - next_ns > period_ns) next_ns = now;   /* first frame, or fell behind: no catch-up */
+    else if (next_ns > now) {
+        int64_t wait = next_ns - now;
+        hle_block_begin();
+        struct timespec w = { (time_t)(wait / 1000000000LL), (long)(wait % 1000000000LL) };
+        nanosleep(&w, NULL);
+        hle_block_end();
+    }
+    next_ns += period_ns;
+}
 static void sf_Flip(void) {                              /* (this, target, flags): swap front and back pixels */
     surf_t *s = S(A32(0));
     int gpu = s->back && d3d7_flip_gpu && d3d7_flip_gpu(A32(0),s->back->self);
@@ -839,6 +867,7 @@ static void sf_Flip(void) {                              /* (this, target, flags
     }
     /* d3d7_note_present owns the unique primary-sequence frame counter. */
     if (d3d7_note_present) d3d7_note_present();          /* renderer's present counter */
+    flip_frame_cap();
     RET(DD_OK, 3);
 }
 static void sf_GetAttachedSurface(void) {                /* (this, &caps, &out) */

@@ -733,9 +733,8 @@ static void ddraw_present_tick(void) {
     if (!hle_dd_frame) return;
     const uint8_t *px; int w, h, pitch, bpp; const uint32_t *pal; unsigned seq = 0;
     if (!hle_dd_frame(&px, &w, &h, &pitch, &bpp, &pal, &seq)) return;
-    /* NFS5_FRAME_CAP is enforced by winmm on the game's frame-clock timer (the
-     * timer that reschedules itself every frame), so the whole guest loop slows
-     * to the chosen rate instead of only the present path. */
+    /* NFS5_FRAME_CAP is enforced in ddraw's Flip (the guest render loop waits
+     * there); the game's simulation timer is never throttled. */
     int new_present = (seq != g_last_present_seq);
     if (new_present) {
         g_last_present_seq = seq; g_present_frames++;
