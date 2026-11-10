@@ -278,9 +278,11 @@ static void present(void) {
          * sleeping) keeps the guest loop out of the HLE's way and makes the
          * presented rate exact; the FPS overlay reflects it. */
         static uint32_t last_shown;
-        /* 2 ms slack: Flip paces the guest at exactly 1/cap, and a strict
-         * check would drift and drop a frame every second or two */
-        if (last_shown && now - last_shown + 2 < (uint32_t)g_cap_ms) return;
+        /* Flip already paces game frames at exactly 1/cap; this only stops
+         * screens that present without Flip (menus) from running far above
+         * the cap. Skip a frame only when it comes much too early (under 3/4
+         * of the period): a paced frame a few ms early is never dropped. */
+        if (last_shown && (now - last_shown) * 4 < (uint32_t)g_cap_ms * 3) return;
         last_shown = now;
     }
     int new_frame = seq != g_shown_seq;
@@ -290,6 +292,7 @@ static void present(void) {
     if (now - ov_last >= 1000) { ov_fps = ov_frames; ov_frames = 0; ov_last = now; }
     if (hle_screen_frame_hook) hle_screen_frame_hook(px, w, h, pitch, bpp);
     if (!g_ren) return;
+    if (new_frame) { extern void nfs5_framelog(char) __attribute__((weak)); if (nfs5_framelog) nfs5_framelog('P'); }
     if (d3d7_present_gpu && !g_menu_depth) {
         int ww,wh; SDL_GetRendererOutputSize(g_ren,&ww,&wh);
         /* any SDL_Renderer call (texture create/destroy, settings, movies)

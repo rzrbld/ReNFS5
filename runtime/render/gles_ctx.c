@@ -234,7 +234,9 @@ void gles_ctx_ensure(void) {
 
 int gles_ctx_swap(void) {
     if (!g_ready || !g_use_sdl || !g_win || g_owns_window) return 0;
-    gles_ctx_ensure();SDL_GL_SwapWindow(g_win);return 1;
+    gles_ctx_ensure();SDL_GL_SwapWindow(g_win);
+    { extern void nfs5_framelog(char) __attribute__((weak)); if (nfs5_framelog) nfs5_framelog('S'); }
+    return 1;
 }
 
 void gles_ctx_shutdown(void) {

@@ -83,6 +83,7 @@
 !/runtime/profiling/nfs5_prof.h
 !/runtime/profiling/nfs5_pcprof.c
 !/runtime/profiling/nfs5_pgo.c
+!/runtime/profiling/nfs5_framelog.c
 !/runtime/render/gles_ctx.c
 !/runtime/render/gles_ctx.h
 !/runtime/render/renderer.c

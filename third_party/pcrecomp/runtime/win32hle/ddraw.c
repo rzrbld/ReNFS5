@@ -863,11 +863,18 @@ static void sf_Flip(void) {                              /* (this, target, flags
         if (!gpu) D3D7_FLUSH(s->back->self);
         uint8_t *t = s->px;
         s->px = s->back->px, s->back->px = t;
-        mark(s);
     }
+    /* Wait for the frame cap's slot BEFORE the presenter hears of the new
+     * frame (mark): the frame then reaches the screen on schedule. Waiting
+     * after it showed each frame when its rendering happened to finish, so
+     * the frames on screen were unevenly spaced and the presenter's display
+     * cap dropped the early ones (66 ms holes, 27.7 instead of 30 fps). The
+     * GPU works on the submitted frame meanwhile. */
+    flip_frame_cap();
+    { extern void nfs5_framelog(char) __attribute__((weak)); if (nfs5_framelog) nfs5_framelog('F'); }
+    if (s->back) mark(s);
     /* d3d7_note_present owns the unique primary-sequence frame counter. */
     if (d3d7_note_present) d3d7_note_present();          /* renderer's present counter */
-    flip_frame_cap();
     RET(DD_OK, 3);
 }
 static void sf_GetAttachedSurface(void) {                /* (this, &caps, &out) */
