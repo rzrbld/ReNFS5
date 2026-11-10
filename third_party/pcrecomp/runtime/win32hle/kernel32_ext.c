@@ -117,15 +117,9 @@ int hle_filetrace(void) {
 /* CreateFileA(name,access,share,sa,disp,flags,template). access GENERIC_READ
  * 0x80000000, GENERIC_WRITE 0x40000000; disp CREATE_NEW 1, CREATE_ALWAYS 2,
  * OPEN_EXISTING 3, OPEN_ALWAYS 4, TRUNCATE_EXISTING 5. */
-/* Port option: hide the game's EA-MAD intro/loading movies.
- *
- * NFS5's FE movie player tears down an object through a pointer that the
- * lifted code has been observed to receive as the lift's dummy return address
- * (0xDEAD0000, see docs/KNOWN_ISSUES.md), which crashes when a movie ends even
- * with no input. Hiding *.mad makes the movie loader take its documented
- * "file missing" early-return path, so the front-end proceeds to its loading
- * screen and menus. This is the standard "skip intro videos" option ports
- * provide (NFS5_SKIP_MOVIES=1); it does not modify the user's files. */
+/* Port option (launcher Movies OFF): hide the game's EA-MAD movies. The movie
+ * loader then takes its "file missing" early return and the front end goes
+ * straight on; the user's files are not modified. */
 static int skip_movies(void) {
     static int on = -1;
     if (on < 0) { const char *v = getenv("NFS5_SKIP_MOVIES"); on = v && *v && strcmp(v, "0") != 0; }
@@ -135,26 +129,14 @@ static int is_movie_name(const char *name) {
     size_t n = strlen(name);
     return n > 4 && !strcasecmp(name + n - 4, ".mad");
 }
-/* Movies play in the game's own player by default: the Porsche Chronicles
- * videos then show inside their screen with its controls, and the menus'
- * background video runs. NFS5_GAME_MOVIES=0 restores the in-process FFmpeg
- * player, which plays each movie fullscreen while the guest waits inside
- * CreateFileA and then reports the file missing: that blocks the game for a
- * whole video (2.5 min for a Chronicles chapter), after which the front end
- * could crash, shows an empty video screen and re-plays the chapter on every
- * screen change. NFS5_PLAY_MOVIES=0 / NFS5_SKIP_MOVIES=1 hide movies. */
-static int game_movies(void) {
-    static int on = -1;
-    if (on < 0) { const char *v = getenv("NFS5_GAME_MOVIES"); on = !(v && *v && !strcmp(v, "0")); }
-    return on;
-}
+/* Movies play in the game's own player (intros, the menus' background video,
+ * Porsche Chronicles inside its screen). Movies off (NFS5_PLAY_MOVIES=0 or
+ * NFS5_SKIP_MOVIES=1) hides the files, and the game takes its "file missing"
+ * path. */
 static int movies_off(void) {
     const char *v = getenv("NFS5_PLAY_MOVIES");
     return skip_movies() || (v && !strcmp(v, "0"));
 }
-
-int nfs5_movie_available(void) __attribute__((weak));
-int nfs5_movie_play(const char *host_path) __attribute__((weak));
 
 static void k_CreateFileA(void) {
     const char *name = ASTR(0);
@@ -162,20 +144,6 @@ static void k_CreateFileA(void) {
     char path[1024];
     int exists = 0;
     if (!name || !*name) { hle_set_last_error(ERROR_PATH_NOT_FOUND); RET(INVALID_HANDLE, 7); }
-    /* Movies: play the EA-MAD file in-process (embedded FFmpeg) when enabled,
-     * then take the same stable "file missing" path the skip option uses: the
-     * game's own movie player is what crashes at movie end on this port. */
-    if (is_movie_name(name) && !movies_off() && !game_movies() && nfs5_movie_available && nfs5_movie_play) {
-        if (nfs5_movie_available()) {
-            char host[1024];
-            if (hle_host_path(name, host, sizeof host)) {
-                fprintf(stderr, "[movie] intercepting guest movie \"%s\"\n", name);
-                (void)nfs5_movie_play(host);
-            }
-        }
-        hle_set_last_error(ERROR_FILE_NOT_FOUND);
-        RET(INVALID_HANDLE, 7);
-    }
     if (movies_off() && is_movie_name(name)) {
         fprintf(stderr, "[file] movies off: hiding movie \"%s\"\n", name);
         hle_set_last_error(ERROR_FILE_NOT_FOUND);

@@ -45,17 +45,6 @@ DEFS    := -D_GNU_SOURCE -DDS_HEAP_START=0x20000000u -DRECOMP_RETADDR=$(RETADDR)
 # EXTRA_DEFS: build-wide experiments, e.g. EXTRA_DEFS=-DRECOMP_MEM_BASE=0x100000000ull
 # (guest memory at a fixed host address: ADDR() adds a constant instead of
 # reloading g_mem_base after every guest store). Requires a clean object tree.
-# Embedded minimal FFmpeg (demuxer ea, decoders eamad + adpcm_ea_r1) for the
-# in-process EA-MAD movie player. Built by scripts/build_ffmpeg_mini.sh for the
-# host and for aarch64; the game links it statically (no host ffmpeg binary).
-FFMPEG_ARCH := $(if $(filter aarch64%,$(CROSS_COMPILE)),aarch64,host)
-FFMPEG_ROOT := build/ffmpeg/$(FFMPEG_ARCH)
-FFMPEG_LIBS := $(wildcard $(FFMPEG_ROOT)/lib/libavformat.a) \
-               $(wildcard $(FFMPEG_ROOT)/lib/libavcodec.a) \
-               $(wildcard $(FFMPEG_ROOT)/lib/libavutil.a)
-ifneq ($(strip $(FFMPEG_LIBS)),)
-DEFS    += -DNFS5_HAVE_FFMPEG -I$(FFMPEG_ROOT)/include
-endif
 INCS    := -Iruntime -Iruntime/render -Ilauncher \
            -Ithird_party/pcrecomp/runtime/recomp32 \
            -Ithird_party/pcrecomp/runtime/win32hle \
@@ -95,9 +84,9 @@ translate:
 modules: docs/evidence/translation-summary.json
 	python3 tools/generate_modules.py
 
-$(OUT): $(OBJ) $(FFMPEG_LIBS)
+$(OUT): $(OBJ)
 	@mkdir -p $(dir $@)
-	$(CC) -g -rdynamic $(EXTRA_LDFLAGS) -o $@ $(OBJ) $(FFMPEG_LIBS) \
+	$(CC) -g -rdynamic $(EXTRA_LDFLAGS) -o $@ $(OBJ) \
 	  $(SDL2_LIBS) $(SDL2TTF_LIBS) $(GLES_LIBS) $(RUNTIME_RPATH) -lm -lpthread -ldl
 
 obj/runtime/%.o: runtime/%.c

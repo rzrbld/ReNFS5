@@ -90,7 +90,7 @@ are excluded from the public source tree.
 Original renfs5 contributions use the [MIT license](LICENSE). Third-party
 components retain their own licenses; see [THIRD_PARTY.md](THIRD_PARTY.md).
 Thanks to EA Canada / EA Seattle for the original game, and to pcrecomp,
-PortMaster, SDL, FFmpeg, miniz and the Desert Storm / The ReThing port work.
+PortMaster, SDL, miniz and the Desert Storm / The ReThing port work.
 
 **Need for Speed: Porsche Unleashed**, its original code, artwork, audio and
 trademarks belong to their respective rights holders (Electronic Arts, Porsche).

@@ -78,14 +78,6 @@ echo "source snapshot: $source_manifest_sha256 at $build_timestamp_utc" >&2
 [[ -d third_party/target-libs/mali-link ]] ||
     fail "link inputs missing; run: bash scripts/cross_prepare.sh"
 
-# Minimal embedded FFmpeg for the in-process EA-MAD movie player (LGPL, static).
-# Built once per arch by scripts/build_ffmpeg_mini.sh; the isolated cross tree
-# symlinks it so the same Makefile finds build/ffmpeg/aarch64.
-if [[ ! -f build/ffmpeg/aarch64/lib/libavcodec.a ]]; then
-    echo "== building embedded ffmpeg-mini for aarch64 (first time) ==" >&2
-    bash scripts/build_ffmpeg_mini.sh --aarch64 || fail "ffmpeg-mini aarch64 build failed"
-fi
-
 # Absolute stub paths, not -l: pkg-config's -L/usr/lib/aarch64-linux-gnu comes
 # earlier on the link line, so -lGLESv2 would resolve to Mesa's libGLESv2.so.2
 # instead of our libmali.so.0 stub.
@@ -107,7 +99,6 @@ else
     ln -s "../../docs" "$stage/docs"
     ln -s "../../../build/translated" "$stage/build/translated"
     ln -s "../../../build/game" "$stage/build/game"
-    ln -s "../../../build/ffmpeg" "$stage/build/ffmpeg"
     echo "== cross build: isolated tree $stage ==" >&2
     "$docker_bin" run --rm --network none --read-only --tmpfs /tmp \
         --user "$(id -u):$(id -g)" -v "$PWD:/src:rw" --workdir /src/build/cross-src "$image" \

@@ -51,7 +51,6 @@
 !/packaging/config/launcher.cfg
 !/packaging/cpu-session.sh
 !/packaging/gameinfo.xml
-!/packaging/licenses/FFmpeg-LGPL.txt
 !/packaging/nfs5-env.sh
 !/packaging/port.json
 !/packaging/source/PLACE-YOUR-GAME-FILES-HERE.txt
@@ -63,7 +62,6 @@
 !/runtime/d3d7_abi.h
 !/runtime/main.c
 !/runtime/movie.c
-!/runtime/movie.h
 !/runtime/nfs5_audio.c
 !/runtime/nfs5_audio_kernels.c
 !/runtime/nfs5_flagpoison.c
@@ -94,7 +92,6 @@
 !/runtime/simd/nfs5_mmx_neon.c
 !/runtime/simd/nfs5_mmx_neon.h
 !/runtime/simd/nfs5_mmx_select.h
-!/scripts/build_ffmpeg_mini.sh
 !/scripts/build_target.sh
 !/scripts/cross_build_launcher.sh
 !/scripts/cross_prepare.sh

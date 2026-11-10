@@ -68,7 +68,7 @@ Preserve both directories when updating. Keep `nfs5/log.txt` and
 ## License and acknowledgements
 
 Thanks to EA Canada / EA Seattle for Need for Speed: Porsche Unleashed, and to
-PortMaster, pcrecomp, SDL, FFmpeg, miniz, Desert Storm and The ReThing.
+PortMaster, pcrecomp, SDL, miniz, Desert Storm and The ReThing.
 Original renfs5 contributions use the MIT license. Dependency notices are in
 `licenses/DEPENDENCIES.md`. The original game is not covered by that license;
 provide your own game files. This project is unofficial and is not affiliated

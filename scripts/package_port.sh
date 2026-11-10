@@ -109,8 +109,6 @@ for f in third_party/pcrecomp/LICENSES/*; do
     install -m 0644 "$f" "$payload/licenses/$(basename "$f")"
 done
 install -m 0644 third_party/miniz/LICENSE "$payload/licenses/miniz.txt"
-install -m 0644 scripts/build_ffmpeg_mini.sh "$payload/licenses/build_ffmpeg_mini.sh"
-install -m 0644 packaging/licenses/FFmpeg-LGPL.txt "$payload/licenses/FFmpeg-LGPL.txt"
 if [[ -f THIRD_PARTY.md ]]; then
     install -m 0644 THIRD_PARTY.md "$payload/licenses/DEPENDENCIES.md"
 fi
