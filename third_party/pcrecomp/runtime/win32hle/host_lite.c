@@ -296,7 +296,13 @@ void mach_leave(void) {
  * section). The registers go with it; nothing between begin and end may touch
  * the register file or guest-shared host state. */
 static __thread unsigned g_block_gen;
+/* A host section lock (nfs5_stream_lock.c) is given up around every wait too,
+ * including waits by a thread that does not hold the machine. */
+extern void hle_section_suspend(void) __attribute__((weak));
+extern void hle_section_resume(void) __attribute__((weak));
+extern void hle_section_yield(void) __attribute__((weak));
 void hle_block_begin(void) {
+    if (hle_section_suspend) hle_section_suspend();
     if (!holding()) return;
     if (hle_parallel()) lockprof_hold_end();
     regs_save(&g_ms.r);
@@ -310,6 +316,7 @@ void hle_block_begin(void) {
  * ran, so the loop polling that mutex never ended. Coming back, a thread
  * first lets a waiter have its turn. */
 void hle_block_end(void) {
+    if (hle_section_resume) hle_section_resume();   /* before the machine: never wait for it holding the machine */
     if (!holding()) return;
     for (int spins = 0; g_waiters && g_owner_gen == g_block_gen && spins < 1000; spins++) sched_yield();
     mach_take();
@@ -320,6 +327,7 @@ void hle_block_end(void) {
 /* Let a waiting thread have the machine, if there is one. The mutex is not
  * fair, so this waits until someone else has actually taken it. */
 void hle_yield(void) {
+    if (hle_section_yield) hle_section_yield();
     /* Movie opens originate on the stream worker while the main guest may
      * spin waiting for I/O, without polling Windows messages. */
     extern void hle_screen_movie_service(void) __attribute__((weak));

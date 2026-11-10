@@ -173,6 +173,10 @@ WRAPPED = {
     "recomp_nfs_porsche_00539F50": "runtime/nfs5_matrix.c (4x4 batch transform)",
     "recomp_nfs_porsche_0053A6C0": "runtime/nfs5_matrix.c (cofactor determinant)",
 }
+# Porsche.exe's stream.c, run one thread at a time (runtime/nfs5_stream_lock.c)
+STREAM_LOCKED = """0056AFA0 0056AFC0 0056AFF0 0056B230 0056B380 0056B3B0 0056B4C0 0056B540 0056B5B0 0056B690 0056B790 0056B800 0056B860 0056BA20 0056BA80 0056BAF0 0056BCE0 0056BD10 0056BD70 0056BE40 0056C000 0056C040 0056C140 0056C380 0056C3E0 0056C420 0056C540 0056C620 0056C740 0056C790 0056C7E0 0056C840""".split()
+WRAPPED.update({f"recomp_nfs_porsche_{a}": "runtime/nfs5_stream_lock.c (stream.c serialised)"
+                for a in STREAM_LOCKED})
 
 
 def wrap_functions(files):

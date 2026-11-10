@@ -66,6 +66,7 @@
 !/runtime/nfs5_audio_kernels.c
 !/runtime/nfs5_flagpoison.c
 !/runtime/nfs5_matrix.c
+!/runtime/nfs5_stream_lock.c
 !/runtime/nfs5_timer_init.c
 !/runtime/nfs5_xform.c
 !/runtime/nfs5_cpu_features.c
