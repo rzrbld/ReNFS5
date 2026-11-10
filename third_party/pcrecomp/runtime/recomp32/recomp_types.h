@@ -271,6 +271,10 @@ void     recomp_set_seg(int sreg, uint32_t selector);
 /* Set 32-bit values in memory (for rep stosd) */
 static inline void MEMSET32(void* dst, uint32_t val, uint32_t count) {
     uint32_t* p = (uint32_t*)dst;
+    if (count <= 16) {                    /* small fills stay inline (no libc call) */
+        for (uint32_t i = 0; i < count; i++) { uint32_t v = val; __builtin_memcpy(p + i, &v, 4); }
+        return;
+    }
     for (uint32_t i = 0; i < count; i++) p[i] = val;
 }
 
@@ -290,6 +294,17 @@ static inline void MEMSET16(void* dst, uint16_t val, uint32_t count) {
  * case and only that one walks element by element. */
 static inline void recomp_rep_movs(uint32_t edi, uint32_t esi, uint32_t n, uint32_t esz, int df) {
     uint32_t b = n * esz;
+    /* MSVC copies structs (matrices, vectors) with `rep movsd`: many small
+     * copies a frame. Non-overlapping forward copies up to 64 bytes use
+     * fixed-size moves the compiler inlines (ldp/stp) instead of a libc call. */
+    if (df > 0 && b <= 64 && (edi - esi >= b) && (esi - edi >= b)) {
+        uint8_t *d = (uint8_t *)ADDR(edi); const uint8_t *s = (const uint8_t *)ADDR(esi);
+        while (b >= 16) { __builtin_memcpy(d, s, 16); d += 16; s += 16; b -= 16; }
+        if (b >= 8) { __builtin_memcpy(d, s, 8); d += 8; s += 8; b -= 8; }
+        if (b >= 4) { __builtin_memcpy(d, s, 4); d += 4; s += 4; b -= 4; }
+        while (b) { *d++ = *s++; b--; }
+        return;
+    }
     if (df > 0 ? edi - esi >= b : esi - edi >= b) {
         if (df > 0) memmove((void*)ADDR(edi), (void*)ADDR(esi), b);
         else memmove((void*)ADDR(edi - b + esz), (void*)ADDR(esi - b + esz), b);
@@ -1196,6 +1211,31 @@ recomp_func_t recomp_lookup(uint32_t va);          /* binary search in dispatch 
 recomp_func_t recomp_lookup_manual(uint32_t va);    /* manual overrides */
 recomp_func_t recomp_lookup_import(uint32_t va);    /* import bridges */
 
+/* Indirect-call resolution. The full chain (manual overrides, dispatch table,
+ * import bridges) is out of line; with RECOMP_INLINE_LOOKUP the host's
+ * direct-mapped cache of final answers (win32hle/host_lite.c) is probed
+ * inline first, so a C++ vtable call that hits costs one load and a compare
+ * instead of three calls. Slots hold atomic pointers to immutable nodes. */
+typedef struct { uint32_t va; recomp_func_t fn; } recomp_lookup_node;
+#define RECOMP_LOOKUP_CACHE 16384
+static inline recomp_func_t recomp_resolve_chain(uint32_t va) {
+    recomp_func_t fn = recomp_lookup_manual(va);
+    if (!fn) fn = recomp_lookup(va);
+    if (!fn) fn = recomp_lookup_import(va);
+    return fn;
+}
+#ifdef RECOMP_INLINE_LOOKUP
+extern recomp_lookup_node *g_lookup_cache[RECOMP_LOOKUP_CACHE];
+static inline __attribute__((always_inline)) recomp_func_t recomp_resolve(uint32_t va) {
+    recomp_lookup_node *n = __atomic_load_n(&g_lookup_cache[((va >> 2) ^ (va >> 16)) & (RECOMP_LOOKUP_CACHE - 1)],
+                                            __ATOMIC_ACQUIRE);
+    if (__builtin_expect(n && n->va == va && n->fn, 1)) return n->fn;
+    return recomp_resolve_chain(va);
+}
+#else
+#define recomp_resolve recomp_resolve_chain
+#endif
+
 /* The dummy return address pushed before a recompiled call. The callee's lifted
  * `ret` pops it. 0xDEAD0000 is a recognizable marker, but if a stack imbalance
  * ever leaks it into a value (e.g. a size argument) the high bits are destructive.
@@ -1247,9 +1287,7 @@ void recomp_shadow_ret(uint32_t fn, uint32_t esp_now, uint32_t top);
     g_icall_from[g_icall_trace_idx & (ICALL_TRACE_SIZE-1)] = g_cur_func; \
     g_icall_trace_idx++; \
     g_icall_count++; \
-    recomp_func_t _fn = recomp_lookup_manual(_va); \
-    if (!_fn) _fn = recomp_lookup(_va); \
-    if (!_fn) _fn = recomp_lookup_import(_va); \
+    recomp_func_t _fn = recomp_resolve(_va); \
     if (_fn) { \
         uint32_t _caller = g_cur_func; \
         PUSH32(esp, RECOMP_RETADDR); \
@@ -1275,9 +1313,7 @@ void recomp_shadow_ret(uint32_t fn, uint32_t esp_now, uint32_t top);
     g_icall_from[g_icall_trace_idx & (ICALL_TRACE_SIZE-1)] = g_cur_func; \
     g_icall_trace_idx++; \
     g_icall_count++; \
-    recomp_func_t _fn = recomp_lookup_manual(_va); \
-    if (!_fn) _fn = recomp_lookup(_va); \
-    if (!_fn) _fn = recomp_lookup_import(_va); \
+    recomp_func_t _fn = recomp_resolve(_va); \
     if (_fn) { RECOMP_FLAGS_OUT(); RECOMP_REGS_OUT(); _fn(); RECOMP_REGS_IN(); } \
     else if (_va == RECOMP_RETADDR) { /* setjmp and friends return by jumping \
         to the saved return address; that is a return, not a missing target. */ } \

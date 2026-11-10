@@ -29,8 +29,24 @@ jobs=${JOBS:-$(nproc 2>/dev/null || echo 4)}
 #                       whatever GLES driver the firmware's SDL2 loads
 # Override with NFS5_EXTRA_DEFS= / NFS5_EXTRA_LDFLAGS= for a plain build. Changing
 # these needs a clean object tree (the Makefile does not track flags).
-extra_defs=${NFS5_EXTRA_DEFS--fno-pie -DRECOMP_THREADED_CPU -DRECOMP_LOCAL_REGS -DRECOMP_MEM_BASE=0x100000000ull -DRECOMP_NO_CALL_FLAGS -DNFS5_SDL_GLES}
+extra_defs=${NFS5_EXTRA_DEFS--fno-pie -DRECOMP_THREADED_CPU -DRECOMP_LOCAL_REGS -DRECOMP_MEM_BASE=0x100000000ull -DRECOMP_NO_CALL_FLAGS -DRECOMP_INLINE_LOOKUP -DNFS5_SDL_GLES -mcpu=cortex-a53}
 extra_ldflags=${NFS5_EXTRA_LDFLAGS--no-pie}
+# Profile-guided build (scripts/pgo.sh drives it): NFS5_PGO=gen builds a
+# counting binary that writes its profile on the device; NFS5_PGO=use builds
+# the optimised one from build/pgo-data. Both compile in the same staged tree
+# (/src/build/cross-src), so the profile files match the objects by path.
+# -fprofile-partial-training keeps code the training never ran optimised as
+# usual instead of for size. -fprofile-correction: NFS5 runs guest threads in
+# parallel and the counters are not atomic, so a few come out inconsistent.
+pgo_dir=/src/build/pgo-data
+case ${NFS5_PGO:-} in
+    "") ;;
+    gen) extra_defs="$extra_defs -fprofile-generate=$pgo_dir -fprofile-update=single -DNFS5_PGO_GEN"
+         extra_ldflags="$extra_ldflags -fprofile-generate=$pgo_dir" ;;
+    use) [[ -d build/pgo-data ]] || { echo "build_target: NFS5_PGO=use needs build/pgo-data (run scripts/pgo.sh)" >&2; exit 1; }
+         extra_defs="$extra_defs -fprofile-use=$pgo_dir -fprofile-partial-training -fprofile-correction -Wno-missing-profile -Wno-coverage-mismatch" ;;
+    *) echo "build_target: NFS5_PGO must be gen or use" >&2; exit 1 ;;
+esac
 
 fail() { echo "build_target: $*" >&2; exit 1; }
 

@@ -364,8 +364,9 @@ void hle_yield(void) {
 /* Each slot is one atomic pointer to an immutable {va, fn} node, so threads
  * running lifted code in parallel never see a torn pair. Nodes are never
  * freed (bounded by the number of distinct call targets). */
-typedef struct { uint32_t va; recomp_func_t fn; } lookup_node;
-static lookup_node *g_lookup_cache[LOOKUP_CACHE];
+typedef recomp_lookup_node lookup_node;
+_Static_assert(LOOKUP_CACHE == RECOMP_LOOKUP_CACHE, "inline lookup cache size");
+lookup_node *g_lookup_cache[LOOKUP_CACHE];   /* read inline by RECOMP_ICALL (recomp_types.h) */
 void hle_lookup_flush(void) {
     for (unsigned i = 0; i < LOOKUP_CACHE; i++) __atomic_store_n(&g_lookup_cache[i], NULL, __ATOMIC_RELEASE);
 }
