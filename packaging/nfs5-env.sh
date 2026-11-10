@@ -69,7 +69,7 @@ esac
 # is built with RECOMP_THREADED_CPU; NFS5_PARALLEL=0 restores one machine lock.
 export NFS5_PARALLEL=${NFS5_PARALLEL:-1}
 : "${NFS5_PLAY_MOVIES:=1}"
-: "${NFS5_FRAME_CAP:=60}"
+: "${NFS5_FRAME_CAP:=0}"
 : "${NFS5_FPS_OVERLAY:=0}"
 : "${NFS5_DETAIL:=medium}"
 : "${NFS5_ASPECT:=4:3}"

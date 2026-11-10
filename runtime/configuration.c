@@ -18,7 +18,7 @@ static const char *frame_cap_text(int cap) {
 
 void nfs5_settings_defaults(Nfs5Settings *s) {
     memset(s, 0, sizeof *s);
-    s->frame_cap = NFS5_FRAME_CAP_60;
+    s->frame_cap = NFS5_FRAME_CAP_UNCAPPED;
     s->fps_counter = 0;
     s->detail = NFS5_DETAIL_MEDIUM;
     s->resolution = NFS5_RES_640x480;
@@ -149,7 +149,7 @@ int nfs5_settings_save(const char *config_dir, const Nfs5Settings *s) {
     if (!f) return -1;
     fprintf(f,
             "# NFS5 port settings (written by nfs5-launcher; safe to edit)\n"
-            "# frame_cap: 30 | 60 | 0 (uncapped). 30 is recommended on H700.\n"
+            "# frame_cap: 0 (uncapped, default) | 30 | 60\n"
             "frame_cap=%s\nfps_counter=%d\ndetail=%s\nresolution=%s\nmovies=%s\naspect=%s\nscreen=%s\n",
             frame_cap_text(s->frame_cap), s->fps_counter,
             s->detail == NFS5_DETAIL_LOW ? "low" : s->detail == NFS5_DETAIL_HIGH ? "high" : "medium",
@@ -297,7 +297,7 @@ int nfs_platform_configure(int argc, char **argv) {
     fprintf(stderr,
             "[nfs5] settings frame_cap=%s fps_overlay=%s detail=%s video=%s movies=%s aspect=%s pad_map=%s\n"
             "[nfs5] the settings UI is nfs5-launcher.aarch64 (config/launcher.cfg)\n",
-            frame_cap ? frame_cap : "60", overlay ? overlay : "0", detail ? detail : "medium",
+            frame_cap ? frame_cap : "0", overlay ? overlay : "0", detail ? detail : "medium",
             video ? video : "640x480", movies ? movies : "1", aspect ? aspect : "4:3", pad ? pad : "(none)");
     return 0;
 }
