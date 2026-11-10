@@ -135,6 +135,23 @@ static int is_movie_name(const char *name) {
     size_t n = strlen(name);
     return n > 4 && !strcasecmp(name + n - 4, ".mad");
 }
+/* Movies play in the game's own player by default: the Porsche Chronicles
+ * videos then show inside their screen with its controls, and the menus'
+ * background video runs. NFS5_GAME_MOVIES=0 restores the in-process FFmpeg
+ * player, which plays each movie fullscreen while the guest waits inside
+ * CreateFileA and then reports the file missing: that blocks the game for a
+ * whole video (2.5 min for a Chronicles chapter), after which the front end
+ * could crash, shows an empty video screen and re-plays the chapter on every
+ * screen change. NFS5_PLAY_MOVIES=0 / NFS5_SKIP_MOVIES=1 hide movies. */
+static int game_movies(void) {
+    static int on = -1;
+    if (on < 0) { const char *v = getenv("NFS5_GAME_MOVIES"); on = !(v && *v && !strcmp(v, "0")); }
+    return on;
+}
+static int movies_off(void) {
+    const char *v = getenv("NFS5_PLAY_MOVIES");
+    return skip_movies() || (v && !strcmp(v, "0"));
+}
 
 int nfs5_movie_available(void) __attribute__((weak));
 int nfs5_movie_play(const char *host_path) __attribute__((weak));
@@ -148,7 +165,7 @@ static void k_CreateFileA(void) {
     /* Movies: play the EA-MAD file in-process (embedded FFmpeg) when enabled,
      * then take the same stable "file missing" path the skip option uses: the
      * game's own movie player is what crashes at movie end on this port. */
-    if (is_movie_name(name) && !skip_movies() && nfs5_movie_available && nfs5_movie_play) {
+    if (is_movie_name(name) && !movies_off() && !game_movies() && nfs5_movie_available && nfs5_movie_play) {
         if (nfs5_movie_available()) {
             char host[1024];
             if (hle_host_path(name, host, sizeof host)) {
@@ -159,8 +176,8 @@ static void k_CreateFileA(void) {
         hle_set_last_error(ERROR_FILE_NOT_FOUND);
         RET(INVALID_HANDLE, 7);
     }
-    if (skip_movies() && is_movie_name(name)) {
-        fprintf(stderr, "[file] NFS5_SKIP_MOVIES: hiding movie \"%s\"\n", name);
+    if (movies_off() && is_movie_name(name)) {
+        fprintf(stderr, "[file] movies off: hiding movie \"%s\"\n", name);
         hle_set_last_error(ERROR_FILE_NOT_FOUND);
         RET(INVALID_HANDLE, 7);
     }

@@ -1,8 +1,8 @@
 /* movie.h - in-process EA-MAD movie player (video + audio) for the port.
  *
- * The game's own MAD player (lifted guest JPEG/MMX code + its async I/O
- * layer) is fragile on this port (docs/KNOWN_ISSUES.md), so when a *.mad file
- * is opened and movies are enabled the HLE layer plays it here instead: the
+ * Fallback only (NFS5_GAME_MOVIES=0): by default the game's own MAD player
+ * runs. With this player, when a *.mad file is opened the HLE layer plays it
+ * here instead: the
  * embedded minimal FFmpeg (demuxer ea, decoders eamad + adpcm_ea_r1) decodes
  * frames, SDL presents YUV directly in the existing game window and the audio
  * goes through the host stream mixer. No host ffmpeg binary and no shell

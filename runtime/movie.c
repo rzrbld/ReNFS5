@@ -12,6 +12,7 @@
 extern int hle_input_any_down(void) __attribute__((weak));
 extern int hle_input_take_press(void) __attribute__((weak));
 extern void hle_dinput_pump(void) __attribute__((weak));
+extern int hle_pad_any_down(void) __attribute__((weak));
 
 #ifdef NFS5_HAVE_FFMPEG
 #include <libavformat/avformat.h>
@@ -82,6 +83,18 @@ static int push_audio(int stream, AVFrame *af, int64_t *pushed) {
     return 1;
 }
 
+/* A skip is a press made during the movie: until every key has been up once
+ * (the opening press released), presses and held keys are ignored. */
+static int skip_requested(int *armed) {
+    int down = (hle_input_any_down && hle_input_any_down()) || (hle_pad_any_down && hle_pad_any_down());
+    int press = hle_input_take_press && hle_input_take_press();
+    if (!*armed) {
+        if (!down) *armed = 1;
+        return 0;
+    }
+    return press || down;
+}
+
 static int movie_play_main(const char *host_path) {
     if (!nfs5_movie_available() || !host_path || !*host_path) return -1;
     AVFormatContext *fc = NULL;
@@ -120,6 +133,13 @@ static int movie_play_main(const char *host_path) {
     frm = av_frame_alloc();
     if (!pkt || !frm) goto done;
     clock_gettime(CLOCK_MONOTONIC, &start);
+    /* The press that opened the movie (a menu click or A on the pad) is
+     * still pending or held when playback starts; taken as a skip, it ended
+     * Porsche Chronicles videos after a few frames. Drop it, and accept a
+     * skip only after every key/button has been up once. */
+    if (hle_dinput_pump) hle_dinput_pump();
+    if (hle_input_take_press) (void)hle_input_take_press();
+    int skip_armed = 0;                      /* armed once nothing is held */
     fprintf(stderr, "[movie] playing %s (%dx%d, embedded eamad%s)\n", host_path,
             vc->width, vc->height, stream >= 0 ? " + audio" : "");
     double deadline = max_sec();
@@ -140,8 +160,7 @@ static int movie_play_main(const char *host_path) {
                             double elapsed = (now.tv_sec - start.tv_sec) + (now.tv_nsec - start.tv_nsec) / 1e9;
                             hle_screen_pump();
                             if (hle_dinput_pump) hle_dinput_pump();
-                            if (frames > 8 && ((hle_input_take_press && hle_input_take_press()) ||
-                                              (hle_input_any_down && hle_input_any_down()))) goto done;
+                            if (skip_requested(&skip_armed)) goto done;
                             if (pts - pts0 <= elapsed || (deadline > 0 && elapsed >= deadline)) break;
                             hle_block_begin(); usleep(2000); hle_block_end();
                         }
@@ -155,8 +174,7 @@ static int movie_play_main(const char *host_path) {
                         /* Let any button skip (the handheld pad bridge and SDL
                          * keyboard both feed the HLE key state). */
                         if (hle_dinput_pump) hle_dinput_pump();
-                        if (frames > 8 && ((hle_input_take_press && hle_input_take_press()) ||
-                                           (hle_input_any_down && hle_input_any_down()))) {
+                        if (skip_requested(&skip_armed)) {
                             fprintf(stderr, "[movie] skipped by input after %d frames\n", frames);
                             av_packet_unref(pkt);
                             goto done;
@@ -190,7 +208,7 @@ static int movie_play_main(const char *host_path) {
         while (hle_audio_stream_queued(stream) > 0) {
             hle_screen_pump();
             if (hle_dinput_pump) hle_dinput_pump();
-            if (hle_input_take_press && hle_input_take_press()) break;
+            if (skip_requested(&skip_armed)) break;
             hle_block_begin(); usleep(10000); hle_block_end();
         }
     }

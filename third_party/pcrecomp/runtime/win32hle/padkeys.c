@@ -353,6 +353,17 @@ static int keypad_poll(SDL_GameController *c) {
     return g_kp_open;
 }
 
+/* Any pad button or trigger held right now (the movie player waits for the
+ * button that opened a movie to be released before a press can skip it). */
+int hle_pad_any_down(void) {
+    if (g_enabled <= 0 || !g_npads || !g_pad[0]) return 0;
+    SDL_GameController *c = g_pad[0];
+    for (int b = 0; b < SDL_CONTROLLER_BUTTON_MAX; b++)
+        if (SDL_GameControllerGetButton(c, (SDL_GameControllerButton)b)) return 1;
+    return SDL_GameControllerGetAxis(c, SDL_CONTROLLER_AXIS_TRIGGERLEFT) > 12000 ||
+           SDL_GameControllerGetAxis(c, SDL_CONTROLLER_AXIS_TRIGGERRIGHT) > 12000;
+}
+
 int hle_pad_virtual_joy(int32_t ax[8], uint8_t bt[32], uint32_t pov[4]) {
     if (g_enabled <= 0 || !g_npads || !g_pad[0]) return 0;
     if (g_kp_open) {                     /* keypad open: the game's joystick is neutral */
