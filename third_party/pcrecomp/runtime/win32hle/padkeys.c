@@ -203,10 +203,23 @@ static keyinfo vk_arrow(int d) {
     default: return (keyinfo){ VK_RIGHT_, 0x4D };
     }
 }
+/* A held button repeats its key like a Windows keyboard: the first repeat
+ * after 500 ms, then ~30 a second (menus scroll while a direction is held).
+ * (Repeating on every poll sent the game hundreds of presses a second.) */
+#define KEY_REPEAT_DELAY_MS 500u
+#define KEY_REPEAT_RATE_MS 33u
 static void key_edge(int prev, int now, keyinfo k) {
-    if (prev && now) hle_input_key(1, (uint32_t)k.vk, k.scan);          /* repeat held keys */
-    if (!prev && now) hle_input_key(1, (uint32_t)k.vk, k.scan);
-    if (prev && !now) hle_input_key(0, (uint32_t)k.vk, k.scan);
+    static uint32_t next_repeat[256];
+    uint32_t t = SDL_GetTicks(), vk = (uint32_t)k.vk & 0xFFu;
+    if (!prev && now) {
+        hle_input_key(1, (uint32_t)k.vk, k.scan);
+        next_repeat[vk] = t + KEY_REPEAT_DELAY_MS;
+    } else if (prev && now) {
+        if ((int32_t)(t - next_repeat[vk]) >= 0) {
+            hle_input_key(1, (uint32_t)k.vk, k.scan);                 /* typematic repeat */
+            next_repeat[vk] = t + KEY_REPEAT_RATE_MS;
+        }
+    } else if (prev && !now) hle_input_key(0, (uint32_t)k.vk, k.scan);
 }
 
 static void apply_axis_dpad(SDL_GameController *c, int axis, int neg_d, int pos_d, int *prev_neg, int *prev_pos) {

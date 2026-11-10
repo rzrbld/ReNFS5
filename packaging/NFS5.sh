@@ -138,7 +138,7 @@ nfs5_finish() {
         wait "$nfs5_game_pid" 2>/dev/null || true
     fi
     if [ "$nfs5_game_started" = 1 ]; then
-        $ESUDO kill -9 "$(pidof gptokeyb)" 2>/dev/null || true
+        for p in $(pidof gptokeyb gptokeyb2); do $ESUDO kill -9 "$p" 2>/dev/null || true; done
     fi
     if declare -F nfs5_cpu_restore >/dev/null; then nfs5_cpu_restore; fi
     if [ "${nfs5_panel_swapped:-0}" = 1 ]; then
@@ -194,8 +194,20 @@ fi
 # Controls: gptokeyb (PortMaster's per-device controller layer) turns the
 # device's controller into one virtual Xbox 360 pad, which the game uses
 # instead of the physical one; it also provides the Start+Select quit.
-if [ -n "${GPTOKEYB:-}" ]; then
+# Prefer gptokeyb2 (-x): the old gptokeyb's xbox360 mode keeps its own
+# virtual pad open (opened twice, closed once) and feeds its output back in,
+# so after the first stick or button event the last few values cycle forever
+# (phantom left-stick "down" = brake taps and brake lights in races, pointer
+# drift in menus, gptokeyb at 25% CPU).
+nfs5_gptk=""
+if [ -n "${GPTOKEYB2:-}" ]; then
+    nfs5_gptk=gptokeyb2
+    $GPTOKEYB2 "nfs5.aarch64" -x &
+elif [ -n "${GPTOKEYB:-}" ]; then
+    nfs5_gptk=gptokeyb
     $GPTOKEYB "nfs5.aarch64" xbox360 &
+fi
+if [ -n "$nfs5_gptk" ]; then
     for _ in $(seq 1 30); do
         grep -q 'X-Box 360' /proc/bus/input/devices 2>/dev/null && break
         sleep 0.1
