@@ -85,15 +85,11 @@ static int verify_data(const char *data_dir, Nfs5InstallState *st, int importing
         snprintf(st->message, sizeof st->message, "data path too long");
         return -1;
     }
-    if (nfs5_sha256_file(porsche, st->porsche_sha256) < 0) {
-        snprintf(st->message, sizeof st->message, "missing %s", NFS5_PORSCHE_EXE);
-        return 1;
-    }
+    /* The Open-Unleashed engine needs only FEData/ and GameData/ (Porsche.exe is read for the
+     * intro movies' tables when present): the EXE/DLL hashes only tell the tested v3.2 apart. */
+    if (nfs5_sha256_file(porsche, st->porsche_sha256) < 0) st->porsche_sha256[0] = 0;
     st->data_present = 1;
-    if (nfs5_sha256_file(dx7z, st->dx7z_sha256) < 0) {
-        snprintf(st->message, sizeof st->message, "missing %s", NFS5_DX7Z_DLL);
-        return 1;
-    }
+    if (nfs5_sha256_file(dx7z, st->dx7z_sha256) < 0) st->dx7z_sha256[0] = 0;
     read_version(data_dir, st->version);
     int porsche_ok = !strcmp(st->porsche_sha256, NFS5_PORSCHE_SHA256);
     int dx7z_ok = !strcmp(st->dx7z_sha256, NFS5_DX7Z_SHA256);
@@ -171,7 +167,7 @@ static int candidate_valid(const char *dir, int *exact, int *installed_like) {
     int dll_ok = have_dll && !strcmp(hex, NFS5_DX7Z_SHA256);
     if (!is_game_data_dir(dir)) return 0;
     if (exe_ok && dll_ok) { *exact = 1; *installed_like = 0; return 1; }
-    if (have_exe && have_dll && is_game_data_dir(dir)) {
+    if (is_game_data_dir(dir)) {
         *exact = 0; *installed_like = 1;
         return 1;
     }
@@ -487,14 +483,9 @@ int nfs5_import(const char *src_dir, const char *root, Nfs5ProgressFn progress, 
     }
     if (progress) progress("VERIFYING SOURCE", 0, user);
     char exe_sha[NFS5_SHA256_HEX_SIZE] = {0}, dll_sha[NFS5_SHA256_HEX_SIZE] = {0};
-    if (nfs5_sha256_file(porsche, exe_sha) < 0) {
-        set_msg(msg, msg_n, "source is missing %s", NFS5_PORSCHE_EXE);
-        return -1;
-    }
-    if (nfs5_sha256_file(dx7z, dll_sha) < 0) {
-        set_msg(msg, msg_n, "source is missing %s", NFS5_DX7Z_DLL);
-        return -1;
-    }
+    /* optional for the engine (FEData/GameData are what it reads); hashed when present */
+    if (nfs5_sha256_file(porsche, exe_sha) < 0) exe_sha[0] = 0;
+    if (nfs5_sha256_file(dx7z, dll_sha) < 0) dll_sha[0] = 0;
     int exact = !strcmp(exe_sha, NFS5_PORSCHE_SHA256) && !strcmp(dll_sha, NFS5_DX7Z_SHA256);
     const char *strict = getenv("NFS5_STRICT_VERSION");
     if (!exact && !(is_game_data_dir(src_dir) && !(strict && *strict && strcmp(strict, "0") != 0))) {

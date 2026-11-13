@@ -212,3 +212,16 @@
 *.csv
 *.pem
 *.key
+
+# Open-Unleashed engine (git submodule: github.com/rzrbld/Open-Unleashed, branch renfs5-h700), CI
+!/.gitmodules
+!/engine
+!/.github/
+!/.github/workflows/
+!/.github/workflows/build.yml
+!/packaging/nfs5.gptk
+!/packaging/screenshot.png
+!/packaging/Dockerfile.portmaster-cross
+!/packaging/RELEASE_NOTES.md
+!/scripts/package_engine.sh
+!/scripts/ci_build.sh

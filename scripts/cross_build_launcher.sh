@@ -6,7 +6,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 target=${1:-host}
-image=${CROSS_IMAGE:-nfs5-cross:bookworm}
+image=${CROSS_IMAGE:-nfs5-pm-cross:bullseye}
 export DOCKER_CONFIG=${DOCKER_CONFIG:-$PWD/work/docker-config}
 mkdir -p build/launcher
 

@@ -1,5 +1,6 @@
 /* NFS5 port configuration; see runtime/configuration.h. */
 #define _POSIX_C_SOURCE 200809L
+#include <dirent.h>
 #include "configuration.h"
 
 #include <errno.h>
@@ -24,6 +25,7 @@ void nfs5_settings_defaults(Nfs5Settings *s) {
     s->resolution = NFS5_RES_640x480;
     s->movies = 1;
     s->aspect = NFS5_ASPECT_4_3;
+    s->graphics = NFS5_GFX_GLES;
 }
 
 const char *nfs5_detail_name(int detail) {
@@ -37,6 +39,35 @@ const char *nfs5_detail_name(int detail) {
 const char *nfs5_aspect_name(int aspect) { return aspect == NFS5_ASPECT_STRETCH ? "STRETCH" : "4:3"; }
 
 const char *nfs5_movies_name(int movies) { return movies ? "ON" : "OFF"; }
+const char *nfs5_graphics_name(int graphics) { return graphics == NFS5_GFX_VULKAN ? "VULKAN" : "GLES"; }
+
+/* A Vulkan loader the engine can open and a driver manifest for it. The Mali blob firmwares have
+ * neither; Mesa firmwares (Panfrost/panvk, Turnip…) ship both. */
+int nfs5_vulkan_available(void) {
+    static const char *const loaders[] = {
+        "/usr/lib/libvulkan.so.1", "/usr/lib64/libvulkan.so.1", "/usr/lib/aarch64-linux-gnu/libvulkan.so.1",
+        "/lib/libvulkan.so.1", "/lib/aarch64-linux-gnu/libvulkan.so.1",
+    };
+    static const char *const icd_dirs[] = { "/usr/share/vulkan/icd.d", "/etc/vulkan/icd.d", "/usr/local/share/vulkan/icd.d" };
+    int loader = 0;
+    for (size_t i = 0; i < sizeof loaders / sizeof *loaders && !loader; i++) loader = access(loaders[i], R_OK) == 0;
+    if (!loader) return 0;
+    const char *env = getenv("VK_ICD_FILENAMES");
+    if (env && *env) return 1;
+    for (size_t i = 0; i < sizeof icd_dirs / sizeof *icd_dirs; i++) {
+        DIR *d = opendir(icd_dirs[i]);
+        if (!d) continue;
+        struct dirent *e;
+        int found = 0;
+        while ((e = readdir(d)) && !found) {
+            size_t n = strlen(e->d_name);
+            found = n > 5 && !strcmp(e->d_name + n - 5, ".json");
+        }
+        closedir(d);
+        if (found) return 1;
+    }
+    return 0;
+}
 
 const char *nfs5_resolution_name(int resolution) {
     switch (resolution) {
@@ -114,6 +145,10 @@ int nfs5_settings_load(const char *config_dir, Nfs5Settings *s) {
                       (val[i] >= '0' && val[i] <= '9') || val[i] == '-' || val[i] == '_')) { ok = 0; break; }
             if (!ok) break;
             memcpy(candidate.screen, val, n + 1);
+        } else if (!strcmp(key, "graphics")) {
+            if (!strcmp(val, "gles")) candidate.graphics = NFS5_GFX_GLES;
+            else if (!strcmp(val, "vulkan")) candidate.graphics = NFS5_GFX_VULKAN;
+            else { ok = 0; break; }
         } else if (!strcmp(key, "aspect")) {
             if (!strcmp(val, "4:3")) candidate.aspect = NFS5_ASPECT_4_3;
             else if (!strcmp(val, "stretch")) candidate.aspect = NFS5_ASPECT_STRETCH;
@@ -145,18 +180,21 @@ int nfs5_settings_save(const char *config_dir, const Nfs5Settings *s) {
     if (s->resolution < 0 || s->resolution >= NFS5_RES_COUNT) { errno = EINVAL; return -1; }
     if (s->movies < 0 || s->movies > 1) { errno = EINVAL; return -1; }
     if (s->aspect < 0 || s->aspect >= NFS5_ASPECT_COUNT) { errno = EINVAL; return -1; }
+    if (s->graphics < 0 || s->graphics >= NFS5_GFX_COUNT) { errno = EINVAL; return -1; }
     FILE *f = fopen(temp, "w");
     if (!f) return -1;
     fprintf(f,
             "# NFS5 port settings (written by nfs5-launcher; safe to edit)\n"
             "# frame_cap: 0 (uncapped, default) | 30 | 60\n"
-            "frame_cap=%s\nfps_counter=%d\ndetail=%s\nresolution=%s\nmovies=%s\naspect=%s\nscreen=%s\n",
+            "# graphics: gles (default) | vulkan (Mesa firmwares with a Vulkan driver)\n"
+            "frame_cap=%s\nfps_counter=%d\ndetail=%s\nresolution=%s\nmovies=%s\naspect=%s\nscreen=%s\ngraphics=%s\n",
             frame_cap_text(s->frame_cap), s->fps_counter,
             s->detail == NFS5_DETAIL_LOW ? "low" : s->detail == NFS5_DETAIL_HIGH ? "high" : "medium",
             nfs5_resolution_name(s->resolution),
             s->movies ? "on" : "off",
             s->aspect == NFS5_ASPECT_STRETCH ? "stretch" : "4:3",
-            s->screen[0] ? s->screen : "default");
+            s->screen[0] ? s->screen : "default",
+            s->graphics == NFS5_GFX_VULKAN ? "vulkan" : "gles");
     int failed = fflush(f) != 0;
     if (!failed && fsync(fileno(f))) failed = 1;
     if (fclose(f)) failed = 1;
@@ -177,6 +215,7 @@ int nfs5_settings_apply_env(const char *config_dir, const Nfs5Settings *s) {
     setenv("NFS5_PLAY_MOVIES", s->movies ? "1" : "0", 1);
     setenv("NFS5_SKIP_MOVIES", s->movies ? "0" : "1", 1);
     setenv("NFS5_ASPECT", s->aspect == NFS5_ASPECT_STRETCH ? "stretch" : "4:3", 1);
+    setenv("NFS_GFX", s->graphics == NFS5_GFX_VULKAN ? "vulkan" : "gles", 1);
     if (config_dir && *config_dir && !getenv("NFS5_PAD_MAP")) {
         char path[PATH_MAX];
         int n = snprintf(path, sizeof path, "%s/%s", config_dir, NFS5_PADMAP_FILE);

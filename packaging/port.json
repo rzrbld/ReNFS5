@@ -7,13 +7,14 @@
   ],
   "items_opt": [],
   "attr": {
-    "title": "ReNFS5: Recomp Unleashed",
+    "title": "ReNFS5: Open Unleashed",
     "porter": [
-      "rzrbld"
+      "rzrbld",
+      "Second-Boot (Open-Unleashed engine)"
     ],
-    "desc": "Experimental ARM64 static-recompilation port of Need for Speed: Porsche Unleashed (2000, v3.2) for H700 handhelds. DirectDraw7/Direct3D7 is translated to OpenGL ES 3, resolved through SDL2 (no direct Mali dependency). Players supply their own game files (folder, ZIP or CD image); the native launcher unpacks and verifies them, with no Python or unzip needed on device. Settings UI: frame cap, FPS counter, resolution, aspect, movies, controller mapping. On H700 races mostly run above 30 FPS.",
+    "desc": "Need for Speed: Porsche Unleashed (2000) on the open-source Open-Unleashed engine by Second-Boot (github.com/Second-Boot/Open-Unleashed) with a native OpenGL ES 3 renderer for handhelds (about 60 FPS in races on H700). Graphics, audio and input go through the firmware's SDL2 and gptokeyb2; nothing is linked to a GPU or audio driver. A native launcher imports and verifies your own game files (folder, ZIP or CD image) and offers settings: frame cap, FPS counter, GLES or Vulkan, movies, game screen.",
     "desc_md": null,
-    "inst": "Extract nfs5.zip into the device's ports folder (not the SD-card root). Put your own game files into nfs5/source/: the installed game folder, a .zip of it, or a CD image (.iso, .bin + .cue, or .mdf + .mds). The native launcher unpacks the image/zip with built-in code, verifies what it finds, copies the game into nfs5/data/ (allow ~1.5 GiB free) and opens the settings menu. Player data is kept beside the binaries in nfs5/saves/ and nfs5/configs/. Then launch NFS5. Requires AArch64 firmware with glibc 2.36+, SDL2, SDL2_ttf and an OpenGL ES 3.x driver that SDL2 can load.",
+    "inst": "Extract nfs5.zip into the device's ports folder. Put your own installed game folder (with FEData and GameData), a .zip of it, or a CD image with the installed game into nfs5/source/. The launcher imports it into nfs5/data/ on first start (allow ~1.5 GiB free). Saves are kept in nfs5/saves/, settings in nfs5/configs/. Requires AArch64 firmware with glibc 2.30+, SDL2 2.0.12+ and an OpenGL ES 3.0 driver that SDL2 can load.",
     "inst_md": null,
     "genres": [
       "racing"
@@ -28,6 +29,6 @@
     "arch": [
       "aarch64"
     ],
-    "min_glibc": "2.36"
+    "min_glibc": "2.30"
   }
 }

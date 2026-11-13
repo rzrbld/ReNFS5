@@ -1,76 +1,71 @@
-# ReNFS5: Recomp Unleashed
+# ReNFS5
 
 ReNFS5 is an unofficial community ARM64 Linux port of **Need for Speed: Porsche Unleashed**
-(2000, v3.2), using static recompilation, OpenGL ES graphics and SDL2. It targets
-Allwinner H700 handhelds running 64-bit muOS or compatible PortMaster firmware.
+(2000) for PortMaster handhelds. The game runs on the open-source
+[Open-Unleashed](https://github.com/Second-Boot/Open-Unleashed) engine, a reimplementation of
+the original, with the ReNFS5 handheld layer: a native OpenGL ES 3 renderer, SDL2 window, audio
+and controller input, and a native launcher that imports and verifies your game files.
 
-This is an experimental port. Desktop racing has been demonstrated; handheld
-performance and complete gameplay compatibility are still being verified.
+Everything goes through the firmware's SDL2 and PortMaster: graphics through the GLES (or
+Vulkan) driver SDL2 loads, sound through SDL2's audio driver, controls through gptokeyb2. The
+game links no GPU or audio library of its own.
 
 ## Quick start
 
 1. Extract `nfs5.zip` into your device's **ports** directory.
-2. Put your own installed game folder, or a ZIP of that folder, into
-   `nfs5/source/`. It must contain `Porsche.exe`, `Drivers/dx7z.dll`, `FEData/`
-   and `GameData/`.
-3. Launch **NFS5**. The native launcher imports and verifies the files, then
-   opens the settings menu. Python is not required on the handheld.
+2. Put your own installed game folder, or a ZIP of it, into `nfs5/source/`. It must contain
+   `FEData/` and `GameData/` (the installed game also has `Porsche.exe`, whose tables the intro
+   movies use, and `SaveData/`, whose players are carried over).
+3. Launch **NFS5**. The launcher imports and verifies the files once, then opens its settings.
 4. Choose your settings and select **SAVE & LAUNCH**.
 
-On muOS, copy `NFS5.sh` into `Roms/PORTS` if that is where your menu looks for
-shortcuts. Keep the payload in `ports/nfs5`; do not create `ports/ports`.
-Allow at least **1.5 GiB free** for import. Existing installed assets are reused.
+On muOS, copy `NFS5.sh` into `Roms/PORTS` if that is where your menu looks for shortcuts.
+Allow at least **1.5 GiB free** for the import. CD images (`.iso`, `.bin` + `.cue`,
+`.mdf` + `.mds`) work when they contain an installed game tree.
 
-CD images (`.iso`, `.bin` + `.cue`, `.mdf` + `.mds`) are supported only when they
-contain an installed game tree. Images containing only a Windows installer
-must first be installed on a PC. The translated executable pair is v3.2;
-other versions are unverified and can be refused with `NFS5_STRICT_VERSION=1`.
+Launcher settings: frame cap, FPS counter, **graphics** (GLES, or Vulkan where the firmware has a
+Vulkan driver, e.g. Panfrost), movies, game screen (dual-screen handhelds).
 
-Recommended starting settings: **640×480, uncapped frame rate, 4:3**.
-The launcher includes **FPS COUNTER ON/OFF**, movies and controller mapping;
-on handhelds with two screens, **GAME SCREEN** picks the display the game uses
-(e.g. DSI-1 / DSI-2). In the game, **Start + Select** quits.
-D-pad selects an option, Left/Right changes it, A confirms and B exits.
+Requires AArch64 firmware with glibc 2.30+, SDL2 2.0.12+ and an OpenGL ES 3.0 driver that SDL2
+can load.
 
-Requires AArch64 firmware, glibc 2.36+, Bash, SDL2, SDL2_ttf and an OpenGL ES
-3.x driver that SDL2 can load. The game links no GPU library: every GLES call
-is resolved through the firmware's SDL2, so it uses the driver SDL2 already
-uses. A PortMaster port: it uses the firmware's PortMaster for controls
-(gptokeyb) and launch handling. Tested on muOS (RG40XX-H, H700, Mali) and
-BananaOS (RG DS, RK3568, Mesa Panfrost); other firmwares are untested.
+## Controls
 
-## Multiplayer
+gptokeyb2's virtual Xbox pad; the game reads it directly.
 
-**LAN games** work between handhelds on the same network (tested: muOS
-RG40XX-H and BananaOS RG DS on the same Wi-Fi). In the game, open
-**Multiplayer → LAN games**:
+| | Menus | Race |
+|---|---|---|
+| Left stick | moves the pointer | steering |
+| A | click (after the stick) / select (after the d-pad) | game action per the pad layout |
+| B | back | |
+| D-pad | moves between buttons | |
+| Triggers | | throttle / brake |
+| Start + Select | quit | quit |
 
-1. On one handheld choose **create...**, confirm the game name with **ok**;
-   it opens the lobby with that handheld as player 1.
-2. On the other handheld the game appears in the **LAN games** list within a
-   few seconds; select it and choose **join**.
-
-The game's IPX network is carried over UDP: discovery broadcasts on UDP port
-1106 and each game uses one more UDP port. Both handhelds must be on the same
-subnet, and the network must pass broadcasts (some guest or "client
-isolation" Wi-Fi networks do not).
-
-**Internet games** and **peer to peer – IP** are listed but untested; typing an
-IP address on a handheld does not work yet (see the known issues).
-**Peer to peer – modem** is not available.
+Typing a name (Create Player and other text boxes): D-pad up / down changes the letter, right
+adds a letter, left (or B) deletes one, L1 / R1 jump ten letters, **Start** finishes (on Create
+Player it also presses OK). A still clicks with the pointer, so OK / Cancel and the other buttons
+stay reachable. Any button skips the intro movies.
 
 ## Saves and settings
 
-Saves are in `nfs5/saves/`; settings are in `nfs5/configs/`.
-Preserve both directories when updating. Keep `nfs5/log.txt` and
-`nfs5/configs/launcher-worker.log` when reporting a problem.
+Saves are in `nfs5/saves/` (on first start, the players from your game's `SaveData` are copied
+there); settings are in `nfs5/configs/`. Preserve both when updating. Keep `nfs5/log.txt` and
+`nfs5/open-unleashed.log` when reporting a problem.
+
+## Compile
+
+Engine: the Open-Unleashed fork with the ReNFS5 handheld layer, built for `aarch64` in Debian
+bullseye with `--no-default-features` (SDL2-only audio). Launcher: C, SDL2. See
+`licenses/ENGINE-SOURCE.txt` for the engine's source.
 
 ## License and acknowledgements
 
-Thanks to EA Canada / EA Seattle for Need for Speed: Porsche Unleashed, and to
-PortMaster, pcrecomp, SDL, miniz, Desert Storm and The ReThing.
-Original renfs5 contributions use the MIT license. Dependency notices are in
-`licenses/DEPENDENCIES.md`. The original game is not covered by that license;
-provide your own game files. This project is unofficial and is not affiliated
-with or endorsed by Electronic Arts or Porsche; their names and trademarks
-belong to their respective owners.
+Thanks to the **Open-Unleashed** developers (Second-Boot) for the engine, to EA Canada /
+EA Seattle for Need for Speed: Porsche Unleashed, and to PortMaster, gptokeyb2, SDL and miniz.
+
+The engine is GPL-3.0-or-later (`licenses/ENGINE-GPL-3.0.txt`, the third-party crates in
+`licenses/THIRD-PARTY-LICENSES.txt`); the ReNFS5 launcher and scripts are MIT
+(`licenses/PORT-MIT.txt`). The original game is not covered by these licenses: provide your own
+game files. This project is unofficial and is not affiliated with or endorsed by Electronic Arts
+or Porsche; their names and trademarks belong to their respective owners.

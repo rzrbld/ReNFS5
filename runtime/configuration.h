@@ -46,7 +46,15 @@ typedef struct {
     int movies;      /* 1 = play EA-MAD movies in-process, 0 = skip them */
     int aspect;      /* NFS5_ASPECT_* */
     char screen[16]; /* "" = the firmware's default, else a display connector (e.g. "DSI-1") */
+    int graphics;    /* NFS5_GFX_*: the engine's graphics API */
 } Nfs5Settings;
+
+#define NFS5_GFX_GLES 0     /* OpenGL ES 3 (default; every firmware) */
+#define NFS5_GFX_VULKAN 1   /* Vulkan (Mesa firmwares: Panfrost/panvk etc.) */
+#define NFS5_GFX_COUNT 2
+const char *nfs5_graphics_name(int graphics);       /* "GLES" / "VULKAN" */
+/* 1 when the firmware has a Vulkan loader and at least one driver (ICD). */
+int nfs5_vulkan_available(void);
 
 void nfs5_settings_defaults(Nfs5Settings *s);
 /* 1 = loaded, 0 = absent (defaults kept), -1 = invalid file (settings untouched). */

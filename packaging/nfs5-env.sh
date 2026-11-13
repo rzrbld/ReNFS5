@@ -65,6 +65,46 @@ case "$v" in
     '4:3'|stretch) export NFS5_ASPECT=${NFS5_ASPECT:-$v} ;;
 esac
 
+v=$(nfs5_setting graphics)
+case "$v" in
+    gles|vulkan) export NFS_GFX=${NFS_GFX:-$v} ;;
+esac
+
+# ---- the Open-Unleashed engine --------------------------------------------
+# The imported game tree (GameData, FEData, Porsche.exe for the intro movies' tables).
+export NFS5_GAME_PATH=${NFS5_GAME_PATH:-${NFS5_DATA:-$gamedir/data}}
+# The game's SaveData: the port's saves/ (the recomp's place too; the log goes beside it). The
+# first start seeds it with the players the imported game brought (data/SaveData).
+export NFS5_SAVE_DIR=${NFS5_SAVE_DIR:-$gamedir/saves}
+mkdir -p "$NFS5_SAVE_DIR" 2>/dev/null || true
+if [ ! -f "$NFS5_SAVE_DIR/player.lst" ] && [ -d "$NFS5_GAME_PATH/SaveData" ]; then
+    for f in "$NFS5_GAME_PATH"/SaveData/*; do
+        [ -f "$f" ] && [ ! -e "$NFS5_SAVE_DIR/${f##*/}" ] && cp -p "$f" "$NFS5_SAVE_DIR/"
+    done
+    echo "[nfs5] saves seeded from the imported game's SaveData"
+fi
+export NFS_GFX=${NFS_GFX:-gles}
+export NFS_FULLSCREEN=${NFS_FULLSCREEN:-${NFS5_FULLSCREEN:-1}}
+# FRAME CAP: 0 = uncapped
+case "${NFS5_FRAME_CAP:-0}" in
+    30|60) export NFS_FPS_CAP=${NFS_FPS_CAP:-$NFS5_FRAME_CAP} ;;
+esac
+# MOVIES off = the patch's NoMovies (read by the engine with nfs5.ini)
+[ "${NFS5_PLAY_MOVIES:-1}" = 0 ] && export NFS5_SKIP_MOVIES=1
+# muOS runs PipeWire with its socket in /run; a session without XDG_RUNTIME_DIR (an ssh start)
+# would leave both SDL2's and ALSA's PipeWire clients without it ("Host is down")
+if [ -z "${XDG_RUNTIME_DIR:-}" ] && [ -S /run/pipewire-0 ]; then
+    export XDG_RUNTIME_DIR=/run PIPEWIRE_RUNTIME_DIR=${PIPEWIRE_RUNTIME_DIR:-/run}
+fi
+# Movies paced by the real clock: handheld audio paths can play faster than real time (muOS on
+# the H700 consumes 44.1 kHz audio ~16% fast), and a picture synced to the sound would run fast
+export NFS5_MOVIE_CLOCK=${NFS5_MOVIE_CLOCK:-wall}
+# Races drive with the pad (gptokeyb's virtual Xbox pad): its layout at every race start
+export NFS5_PAD_LAYOUT=${NFS5_PAD_LAYOUT:-1}
+# Audio: SDL2 first (the firmware's driver), ALSA directly (cpal) if SDL2 cannot open one.
+export NFS_AUDIO=${NFS_AUDIO:-auto}
+export RUST_BACKTRACE=${RUST_BACKTRACE:-1}
+
 # Guest threads run in parallel (lock only around host calls) when the binary
 # is built with RECOMP_THREADED_CPU; NFS5_PARALLEL=0 restores one machine lock.
 export NFS5_PARALLEL=${NFS5_PARALLEL:-1}

@@ -1,0 +1,9 @@
+# ReNFS5 gptokeyb mapping (gptokeyb2 format).
+#
+# The game reads gptokeyb's virtual Xbox 360 pad (started with -x) and does everything itself:
+# analog driving, the menu pointer (left stick + A), menus (d-pad, A, B), name entry (d-pad letter
+# wheel, Start to finish). So no button is mapped to a key here, or every press would reach the
+# game twice. Start + Select (the hotkey) still quits: gptokeyb2 handles that itself.
+
+[controls]
+overlay = clear

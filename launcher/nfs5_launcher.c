@@ -509,7 +509,8 @@ static void draw_frame(SDL_Renderer *ren, const char *subtitle) {
 
     /* header wordmark */
     draw_text_spaced(ren, "RENFS5", 40, 16, 2, 4, COL_RED);
-    draw_text_spaced(ren, "RECOMP UNLEASHED", 40, 38, 3, 5, COL_SILVER);
+    draw_text_spaced(ren, "OPEN UNLEASHED", 40, 38, 3, 5, COL_SILVER);
+    draw_text(ren, "ENGINE: OPEN-UNLEASHED BY SECOND-BOOT", 42, 64, 1, COL_SILVER_DK);
     draw_tacho(ren, W - 62, 40, 30, 0.62f + 0.06f * SDL_sinf(SDL_GetTicks() / 400.0f));
 
     /* livery stripe */
@@ -662,7 +663,7 @@ static int toast_frames = 0;
 static int pad_page_count(void) { return NFS5_ACTION_COUNT + 2; }
 /* Settings page rows, top to bottom. GAME SCREEN only shows on handhelds with
  * more than one connected display. */
-enum { ROW_FRAME_CAP, ROW_FPS, ROW_RESOLUTION, ROW_ASPECT, ROW_MOVIES, ROW_SCREEN, ROW_PADMAP,
+enum { ROW_FRAME_CAP, ROW_FPS, ROW_GRAPHICS, ROW_RESOLUTION, ROW_ASPECT, ROW_MOVIES, ROW_SCREEN, ROW_PADMAP,
        ROW_INSTALLED, ROW_LAUNCH, ROW_EXIT, ROW_COUNT };
 static int settings_page_count(void) { return ROW_COUNT; }
 
@@ -691,13 +692,33 @@ static void scan_screens(void) {
             }
     }
 }
+/* Whether this firmware can run the engine on Vulkan (checked once). */
+static int vulkan_available(void) {
+    static int known = -1;
+    if (known < 0) known = getenv("NFS5_FAKE_VULKAN") ? atoi(getenv("NFS5_FAKE_VULKAN")) != 0 : nfs5_vulkan_available();
+    return known;
+}
+
 static int screen_row_shown(void) {
     if (g_nscreens < 0) scan_screens();
     return g_nscreens > 1 || g_settings.screen[0];   /* a saved choice stays editable */
 }
+/* Rows the engine has no use for: it renders at the panel's own size and keeps its
+ * controls in its own Options menu. */
+static int row_shown(int r) {
+    if (r == ROW_RESOLUTION || r == ROW_ASPECT || r == ROW_PADMAP) return 0;
+    if (r == ROW_SCREEN) return screen_row_shown();
+    return 1;
+}
+/* Position of a row among the shown ones. */
+static int row_slot(int r) {
+    int n = 0;
+    for (int i = 0; i < r; i++) n += row_shown(i);
+    return n;
+}
 static void move_selection(int dir) {
     do selection = (selection + dir + ROW_COUNT) % ROW_COUNT;
-    while (selection == ROW_SCREEN && !screen_row_shown());
+    while (!row_shown(selection));
 }
 static void enter_settings(void) {
     load_persistent();
@@ -833,16 +854,16 @@ static void draw_settings_page(SDL_Renderer *ren) {
     SDL_Color normal = COL_TEXT, hot = COL_BRIGHT;
     int y = 124;
     int step = 30;
-    int shown = screen_row_shown();
-    /* rows below GAME SCREEN move up when it is hidden */
+    /* hidden rows take no space (row_shown) */
 #define ROW(r, label, value, gap, n, h) \
-    draw_row(ren, label, value, y + ((r) - (!shown && (r) > ROW_SCREEN)) * step + (gap), selection == (r), n, h)
+    if (row_shown(r)) draw_row(ren, label, value, y + row_slot(r) * step + (gap), selection == (r), n, h)
     ROW(ROW_FRAME_CAP, "FRAME CAP", frame_cap_label(g_settings.frame_cap), 0, normal, hot);
     ROW(ROW_FPS, "FPS COUNTER", g_settings.fps_counter ? "ON" : "OFF", 0, normal, hot);
+    ROW(ROW_GRAPHICS, "GRAPHICS", vulkan_available() ? nfs5_graphics_name(g_settings.graphics) : "GLES (NO VULKAN)", 0, normal, hot);
     ROW(ROW_RESOLUTION, "RESOLUTION", nfs5_resolution_name(g_settings.resolution), 0, normal, hot);
     ROW(ROW_ASPECT, "ASPECT", nfs5_aspect_name(g_settings.aspect), 0, normal, hot);
     ROW(ROW_MOVIES, "MOVIES", nfs5_movies_name(g_settings.movies), 0, normal, hot);
-    if (shown) ROW(ROW_SCREEN, "GAME SCREEN", g_settings.screen[0] ? g_settings.screen : "DEFAULT", 0, normal, hot);
+    ROW(ROW_SCREEN, "GAME SCREEN", g_settings.screen[0] ? g_settings.screen : "DEFAULT", 0, normal, hot);
     ROW(ROW_PADMAP, "CONTROLLER MAPPING", "EDIT >", 0, normal, hot);
     ROW(ROW_INSTALLED, "INSTALLED GAME", g_data_verified ? "VERIFIED" : "CHECK >", 0, normal, hot);
     ROW(ROW_LAUNCH, "SAVE & LAUNCH", "", 6, hot, hot);
@@ -920,6 +941,9 @@ static void change_setting(int dir) {
             else g_settings.frame_cap = g_settings.frame_cap == 60 ? 0 : g_settings.frame_cap == 0 ? 30 : 60;
             break;
         case ROW_FPS: g_settings.fps_counter = !g_settings.fps_counter; break;
+        case ROW_GRAPHICS:      /* Vulkan only where the firmware has a driver for it */
+            if (vulkan_available()) g_settings.graphics = g_settings.graphics == NFS5_GFX_VULKAN ? NFS5_GFX_GLES : NFS5_GFX_VULKAN;
+            break;
         case ROW_RESOLUTION:
             g_settings.resolution = (g_settings.resolution + (dir > 0 ? 1 : NFS5_RES_COUNT - 1)) % NFS5_RES_COUNT;
             break;

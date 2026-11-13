@@ -1,11 +1,11 @@
 #!/bin/bash
-# ReNFS5: Recomp Unleashed - PortMaster launch script.
+# ReNFS5 - PortMaster launch script (the Open-Unleashed engine with the ReNFS5 handheld layer).
 #
-# Follows the PortMaster port template (as e.g. the doom3 port does): the
-# firmware's PortMaster control/mod scripts handle frontend handover, input
-# focus and cleanup, gptokeyb (xbox360 mode) is the controller layer and the
-# Start+Select quit, and SDL picks the video and audio drivers. Starts the
-# native launcher (verify/import + settings), then the game.
+# Follows the PortMaster port template: the firmware's PortMaster control/mod
+# scripts handle frontend handover and cleanup, gptokeyb (xbox360 mode) is the
+# controller layer and the Start+Select quit, SDL picks the video and audio
+# drivers. Starts the native launcher (verify/import + settings), then the game:
+# the Open-Unleashed engine (GLES or Vulkan, the launcher's GRAPHICS setting).
 #
 # Set NFS5_ROOT to use a non-standard payload directory.
 
@@ -100,7 +100,7 @@ fi
 # Audio and video: SDL picks the drivers the firmware provides (set
 # SDL_AUDIODRIVER / SDL_VIDEODRIVER to override).
 
-chmod +x "$GAMEDIR/nfs5.aarch64" "$GAMEDIR/nfs5-launcher.aarch64" 2>/dev/null || true
+$ESUDO chmod +x "$GAMEDIR/nfs5.aarch64" "$GAMEDIR/nfs5-launcher.aarch64" 2>/dev/null || true
 mkdir -p "$GAMEDIR/saves" "$GAMEDIR/configs" "$GAMEDIR/source"
 : "${NFS5_DATA:=$GAMEDIR/data}"
 # Player data lives beside the binaries: <gamedir>/saves and <gamedir>/configs.
@@ -202,10 +202,10 @@ fi
 nfs5_gptk=""
 if [ -n "${GPTOKEYB2:-}" ]; then
     nfs5_gptk=gptokeyb2
-    $GPTOKEYB2 "nfs5.aarch64" -x &
+    $GPTOKEYB2 "nfs5.aarch64" -c "$GAMEDIR/nfs5.gptk" -x &
 elif [ -n "${GPTOKEYB:-}" ]; then
     nfs5_gptk=gptokeyb
-    $GPTOKEYB "nfs5.aarch64" xbox360 &
+    $GPTOKEYB "nfs5.aarch64" -c "$GAMEDIR/nfs5.gptk" xbox360 &
 fi
 if [ -n "$nfs5_gptk" ]; then
     for _ in $(seq 1 30); do

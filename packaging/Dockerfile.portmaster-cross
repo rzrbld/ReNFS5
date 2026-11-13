@@ -1,0 +1,33 @@
+# aarch64 cross toolchain for the PortMaster builds (engine + launcher): Debian bullseye, glibc 2.31.
+#
+#   docker build -f packaging/Dockerfile.portmaster-cross -t nfs5-pm-cross:bullseye packaging
+#
+# Debian bullseye: the binaries need glibc 2.31 at most, which older PortMaster firmwares have (the
+# firmware's SDL2 is what the binaries link; GLES / Vulkan are loaded through SDL2 at run time.
+FROM debian:bullseye-slim
+
+# bullseye's support has ended: its packages are on archive.debian.org
+RUN printf 'deb http://archive.debian.org/debian bullseye main\ndeb http://archive.debian.org/debian-security bullseye-security main\n' > /etc/apt/sources.list \
+ && rm -f /etc/apt/sources.list.d/*
+
+RUN dpkg --add-architecture arm64 \
+ && apt-get update \
+ && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+      gcc-aarch64-linux-gnu g++-aarch64-linux-gnu libc6-dev-arm64-cross binutils-aarch64-linux-gnu \
+      libsdl2-dev:arm64 libasound2-dev:arm64 \
+      gcc libc6-dev ca-certificates curl make pkg-config cmake \
+ && rm -rf /var/lib/apt/lists/*
+
+ENV PKG_CONFIG_LIBDIR=/usr/lib/aarch64-linux-gnu/pkgconfig:/usr/share/pkgconfig
+ENV PKG_CONFIG_SYSROOT_DIR=/
+
+ARG RUST_VERSION=1.99.0
+ENV RUSTUP_HOME=/opt/rustup CARGO_HOME=/opt/cargo PATH=/opt/cargo/bin:$PATH
+RUN curl -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain ${RUST_VERSION} \
+      --target aarch64-unknown-linux-gnu \
+ && chmod -R a+rwX /opt/cargo /opt/rustup
+
+ENV CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc \
+    CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc \
+    CXX_aarch64_unknown_linux_gnu=aarch64-linux-gnu-g++ \
+    PKG_CONFIG_ALLOW_CROSS=1
