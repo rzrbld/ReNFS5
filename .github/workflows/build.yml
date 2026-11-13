@@ -76,6 +76,8 @@ jobs:
             echo "Engine source: https://github.com/rzrbld/Open-Unleashed/tree/${engine} (fork of https://github.com/Second-Boot/Open-Unleashed)"
             echo "ZIP SHA-256: \`${sha}\`"
           } > "$RUNNER_TEMP/notes.md"
+          # the checkout has the commit, not the annotated tag: fetch it for its message (the title)
+          git fetch --force origin "refs/tags/$GITHUB_REF_NAME:refs/tags/$GITHUB_REF_NAME"
           title=$(git tag -l --format='%(contents:subject)' "$GITHUB_REF_NAME")
           [ -n "$title" ] && [ "$title" != "$(git log -1 --format=%s)" ] || title="ReNFS5: Open Unleashed — ${GITHUB_REF_NAME#portmaster-}"
           gh release create "$GITHUB_REF_NAME" build/package-out/nfs5.zip build/package-out/nfs5.zip.sha256 \
