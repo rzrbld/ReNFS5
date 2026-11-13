@@ -78,6 +78,8 @@ export NFS5_GAME_PATH=${NFS5_GAME_PATH:-${NFS5_DATA:-$gamedir/data}}
 export NFS5_SAVE_DIR=${NFS5_SAVE_DIR:-$gamedir/saves}
 # the engine's compiled-shader cache (loaded at start: no shader compiles mid-race)
 export NFS5_SHADER_CACHE=${NFS5_SHADER_CACHE:-$gamedir/configs/shader-cache}
+# GL work on its own thread (the scene of the next frame is built meanwhile); 0 turns it off
+export NFS_RENDER_THREAD=${NFS_RENDER_THREAD:-1}
 mkdir -p "$NFS5_SAVE_DIR" 2>/dev/null || true
 if [ ! -f "$NFS5_SAVE_DIR/player.lst" ] && [ -d "$NFS5_GAME_PATH/SaveData" ]; then
     for f in "$NFS5_GAME_PATH"/SaveData/*; do

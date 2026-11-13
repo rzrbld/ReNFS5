@@ -1,12 +1,9 @@
 ReNFS5: Open Unleashed, for ARM64 PortMaster handhelds, on the **[Open-Unleashed](https://github.com/Second-Boot/Open-Unleashed)** engine by **Second-Boot** — thanks to them. Supply your own installed copy of the game.
 
-**Smoother races.** Measured on the RG40XX-H (H700) in a career-style race (Farmland, 7 opponents, chase view, the game's default graphics settings):
-- **Mesh streaming**: the car parts the game updates every frame (about 95 at default car detail) no longer stall the Mali driver. Average 27.6 → 41.2 FPS; frames over 40 ms in 50 s: 250+ → 16.
-- **Shader cache**: compiled shaders are kept in `nfs5/configs/shader-cache/` and loaded at start, so new effects no longer freeze the race for 60–170 ms when they first appear (only the first race after an update fills the cache).
-- **Even frame pacing**: game time advances in whole screen refreshes, so motion matches what the screen shows. With the launcher's **FRAME CAP 30**, every frame lasts exactly two refreshes — recommended for the smoothest feel at high settings; uncapped is faster on average but uneven.
-- Lens-flare checks no longer make the CPU wait for the GPU.
-
-Also in this release (since the first Open Unleashed build): Vulkan goes through SDL2's loader as well; the RACE button is greyed out while disabled and the bottom-bar icons line up with their labels; a larger FPS counter; the name box never traps the pad (A clicks, Start confirms).
+**Multithreaded rendering and smooth collisions.** Measured on the RG40XX-H (H700), Farmland, 7 opponents, chase view, the game's default graphics settings:
+- **Render thread on by default**: the GPU work of one frame is sent from its own thread while the next frame is built. Farmland 42 → 53 FPS, Alps 39 → 47 FPS; with **FRAME CAP 30**, all but a handful of frames last exactly two refreshes. (`NFS_RENDER_THREAD=0` in `nfs5/nfs5-env.sh` turns it off.)
+- **No stutter at the first contact**: each car's crushable body parts are prepared while the race loads; before, the first crash with the opponents moved a few hundred parts at once (a 30–60 ms freeze). Parts a crash re-sends unchanged are skipped, and a frame's part updates go to the GPU in one copy.
+- Includes the previous release: mesh streaming, shader cache, even frame pacing.
 
 Install or upgrade:
 1. Download `nfs5.zip` and its SHA-256 file.
