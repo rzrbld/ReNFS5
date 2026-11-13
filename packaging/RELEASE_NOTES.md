@@ -1,17 +1,18 @@
-ReNFS5: Open Unleashed, for ARM64 PortMaster handhelds. Supply your own installed copy of the game.
+ReNFS5: Open Unleashed, for ARM64 PortMaster handhelds, on the **[Open-Unleashed](https://github.com/Second-Boot/Open-Unleashed)** engine by **Second-Boot** — thanks to them. Supply your own installed copy of the game.
 
-**New engine.** ReNFS5 now runs on **[Open-Unleashed](https://github.com/Second-Boot/Open-Unleashed)**, the open-source reimplementation of Need for Speed: Porsche Unleashed by **Second-Boot** — huge thanks to them. The static recompilation of earlier releases is retired. On top of the engine, ReNFS5 adds the handheld layer:
-- **Native OpenGL ES 3 renderer**: about 60 FPS in races on the RG40XX-H (H700, Mali-G31); heavy stretches dip into the 30s–50s. The engine's original wgpu renderer stays available as the **Vulkan** setting on firmwares with a Vulkan driver (e.g. Panfrost).
-- **Everything through SDL2 and PortMaster**: graphics (GLES, and Vulkan via SDL2's loader), audio and controllers come from the firmware's SDL2; the game links no GPU or audio library. Controls through gptokeyb2.
-- **Handheld controls**: left stick + A as the pointer, d-pad menus, name entry with the d-pad (Start finishes and confirms), Start + Select quits.
-- **Easier game files**: any installed copy with `FEData/` and `GameData/` works (folder, ZIP or CD image); `Porsche.exe` is used for the intro movies when present.
-- Launcher: renamed **Open Unleashed**, large FPS counter, graphics setting (GLES default / Vulkan).
+**Smoother races.** Measured on the RG40XX-H (H700) in a career-style race (Farmland, 7 opponents, chase view, the game's default graphics settings):
+- **Mesh streaming**: the car parts the game updates every frame (about 95 at default car detail) no longer stall the Mali driver. Average 27.6 → 41.2 FPS; frames over 40 ms in 50 s: 250+ → 16.
+- **Shader cache**: compiled shaders are kept in `nfs5/configs/shader-cache/` and loaded at start, so new effects no longer freeze the race for 60–170 ms when they first appear (only the first race after an update fills the cache).
+- **Even frame pacing**: game time advances in whole screen refreshes, so motion matches what the screen shows. With the launcher's **FRAME CAP 30**, every frame lasts exactly two refreshes — recommended for the smoothest feel at high settings; uncapped is faster on average but uneven.
+- Lens-flare checks no longer make the CPU wait for the GPU.
+
+Also in this release (since the first Open Unleashed build): Vulkan goes through SDL2's loader as well; the RACE button is greyed out while disabled and the bottom-bar icons line up with their labels; a larger FPS counter; the name box never traps the pad (A clicks, Start confirms).
 
 Install or upgrade:
 1. Download `nfs5.zip` and its SHA-256 file.
 2. From the ZIP, copy **`NFS5.sh`** and the **`nfs5`** folder into your **ports** directory, replacing existing files. Leave the other ZIP files (`port.json`, `README.md`, `gameinfo.xml`, `screenshot.png`) out of `ports`; they are PortMaster metadata. `saves/` and `configs/` are preserved.
 3. On muOS, update `NFS5.sh` in `Roms/PORTS` if used; keep the payload in `ports/nfs5`.
-4. For a new installation, put your installed game folder (or a ZIP of it) into `nfs5/source/` and launch **NFS5**.
+4. For a new installation, put your installed game folder (or a ZIP of it) into `nfs5/source/` and launch **NFS5**. It needs `FEData/` and `GameData/`; `Porsche.exe` is used for the intro movies when present.
 
 Requires AArch64 firmware with glibc 2.30+, SDL2, PortMaster and an OpenGL ES 3.0 driver that SDL2 can load. This is a PortMaster-compatible package, not a PortMaster catalogue submission. It contains no original game files, assets, saves or user settings.
 

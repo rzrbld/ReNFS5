@@ -76,6 +76,8 @@ export NFS5_GAME_PATH=${NFS5_GAME_PATH:-${NFS5_DATA:-$gamedir/data}}
 # The game's SaveData: the port's saves/ (the recomp's place too; the log goes beside it). The
 # first start seeds it with the players the imported game brought (data/SaveData).
 export NFS5_SAVE_DIR=${NFS5_SAVE_DIR:-$gamedir/saves}
+# the engine's compiled-shader cache (loaded at start: no shader compiles mid-race)
+export NFS5_SHADER_CACHE=${NFS5_SHADER_CACHE:-$gamedir/configs/shader-cache}
 mkdir -p "$NFS5_SAVE_DIR" 2>/dev/null || true
 if [ ! -f "$NFS5_SAVE_DIR/player.lst" ] && [ -d "$NFS5_GAME_PATH/SaveData" ]; then
     for f in "$NFS5_GAME_PATH"/SaveData/*; do
