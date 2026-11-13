@@ -117,6 +117,10 @@ int nfs5_settings_load(const char *config_dir, Nfs5Settings *s) {
             else if (!strcmp(val, "30")) candidate.frame_cap = 30;
             else if (!strcmp(val, "60")) candidate.frame_cap = 60;
             else { ok = 0; break; }
+        } else if (!strcmp(key, "vibration")) {
+            if (!strcmp(val, "0") || !strcmp(val, "off")) candidate.vibration = 0;
+            else if (!strcmp(val, "1") || !strcmp(val, "on")) candidate.vibration = 1;
+            else { ok = 0; break; }
         } else if (!strcmp(key, "fps_counter")) {
             if (!strcmp(val, "0")) candidate.fps_counter = 0;
             else if (!strcmp(val, "1")) candidate.fps_counter = 1;
@@ -176,6 +180,7 @@ int nfs5_settings_save(const char *config_dir, const Nfs5Settings *s) {
     }
     if (s->frame_cap != 0 && s->frame_cap != 30 && s->frame_cap != 60) { errno = EINVAL; return -1; }
     if (s->fps_counter < 0 || s->fps_counter > 1) { errno = EINVAL; return -1; }
+    if (s->vibration < 0 || s->vibration > 1) { errno = EINVAL; return -1; }
     if (s->detail < 0 || s->detail >= NFS5_DETAIL_COUNT) { errno = EINVAL; return -1; }
     if (s->resolution < 0 || s->resolution >= NFS5_RES_COUNT) { errno = EINVAL; return -1; }
     if (s->movies < 0 || s->movies > 1) { errno = EINVAL; return -1; }
@@ -187,14 +192,14 @@ int nfs5_settings_save(const char *config_dir, const Nfs5Settings *s) {
             "# NFS5 port settings (written by nfs5-launcher; safe to edit)\n"
             "# frame_cap: 0 (uncapped, default) | 30 | 60\n"
             "# graphics: gles (default) | vulkan (Mesa firmwares with a Vulkan driver)\n"
-            "frame_cap=%s\nfps_counter=%d\ndetail=%s\nresolution=%s\nmovies=%s\naspect=%s\nscreen=%s\ngraphics=%s\n",
+            "frame_cap=%s\nfps_counter=%d\ndetail=%s\nresolution=%s\nmovies=%s\naspect=%s\nscreen=%s\ngraphics=%s\nvibration=%d\n",
             frame_cap_text(s->frame_cap), s->fps_counter,
             s->detail == NFS5_DETAIL_LOW ? "low" : s->detail == NFS5_DETAIL_HIGH ? "high" : "medium",
             nfs5_resolution_name(s->resolution),
             s->movies ? "on" : "off",
             s->aspect == NFS5_ASPECT_STRETCH ? "stretch" : "4:3",
             s->screen[0] ? s->screen : "default",
-            s->graphics == NFS5_GFX_VULKAN ? "vulkan" : "gles");
+            s->graphics == NFS5_GFX_VULKAN ? "vulkan" : "gles", s->vibration ? 1 : 0);
     int failed = fflush(f) != 0;
     if (!failed && fsync(fileno(f))) failed = 1;
     if (fclose(f)) failed = 1;
@@ -213,6 +218,7 @@ int nfs5_settings_apply_env(const char *config_dir, const Nfs5Settings *s) {
     setenv("NFS5_DETAIL", detail, 1);
     setenv("NFS5_VIDEO_MODE", nfs5_resolution_name(s->resolution), 1);
     setenv("NFS5_PLAY_MOVIES", s->movies ? "1" : "0", 1);
+    setenv("NFS5_RUMBLE", s->vibration ? "1" : "0", 1);
     setenv("NFS5_SKIP_MOVIES", s->movies ? "0" : "1", 1);
     setenv("NFS5_ASPECT", s->aspect == NFS5_ASPECT_STRETCH ? "stretch" : "4:3", 1);
     setenv("NFS_GFX", s->graphics == NFS5_GFX_VULKAN ? "vulkan" : "gles", 1);

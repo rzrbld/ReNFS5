@@ -23,7 +23,7 @@ On muOS, copy `NFS5.sh` into `Roms/PORTS` if that is where your menu looks for s
 Allow at least **1.5 GiB free** for the import. CD images (`.iso`, `.bin` + `.cue`,
 `.mdf` + `.mds`) work when they contain an installed game tree.
 
-Launcher settings: frame cap, FPS counter, **graphics** (GLES, or Vulkan where the firmware has a
+Launcher settings: frame cap, FPS counter, **vibration** (pad rumble, off by default), **graphics** (GLES, or Vulkan where the firmware has a
 Vulkan driver, e.g. Panfrost), movies, game screen (dual-screen handhelds).
 
 Requires AArch64 firmware with glibc 2.30+, SDL2 2.0.12+ and an OpenGL ES 3.0 driver that SDL2

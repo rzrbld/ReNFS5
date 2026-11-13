@@ -1,9 +1,7 @@
 ReNFS5: Open Unleashed, for ARM64 PortMaster handhelds, on the **[Open-Unleashed](https://github.com/Second-Boot/Open-Unleashed)** engine by **Second-Boot** — thanks to them. Supply your own installed copy of the game.
 
-**Multithreaded rendering and smooth collisions.** Measured on the RG40XX-H (H700), Farmland, 7 opponents, chase view, the game's default graphics settings:
-- **Render thread on by default**: the GPU work of one frame is sent from its own thread while the next frame is built. Farmland 42 → 53 FPS, Alps 39 → 47 FPS; with **FRAME CAP 30**, all but a handful of frames last exactly two refreshes. (`NFS_RENDER_THREAD=0` in `nfs5/nfs5-env.sh` turns it off.)
-- **No stutter at the first contact**: each car's crushable body parts are prepared while the race loads; before, the first crash with the opponents moved a few hundred parts at once (a 30–60 ms freeze). Parts a crash re-sends unchanged are skipped, and a frame's part updates go to the GPU in one copy.
-- Includes the previous release: mesh streaming, shader cache, even frame pacing.
+- **Vibration off by default**: the pad's rumble in races is now a launcher setting, **VIBRATION** (OFF / ON), off unless you turn it on.
+- Includes the previous releases: render thread on by default (Farmland 42 → 53 FPS, Alps 39 → 47 FPS on the RG40XX-H), no stutter at the first contact with opponents, mesh streaming, shader cache and even frame pacing (**FRAME CAP 30** gives perfectly even frames at high settings).
 
 Install or upgrade:
 1. Download `nfs5.zip` and its SHA-256 file.

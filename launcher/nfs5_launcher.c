@@ -663,7 +663,7 @@ static int toast_frames = 0;
 static int pad_page_count(void) { return NFS5_ACTION_COUNT + 2; }
 /* Settings page rows, top to bottom. GAME SCREEN only shows on handhelds with
  * more than one connected display. */
-enum { ROW_FRAME_CAP, ROW_FPS, ROW_GRAPHICS, ROW_RESOLUTION, ROW_ASPECT, ROW_MOVIES, ROW_SCREEN, ROW_PADMAP,
+enum { ROW_FRAME_CAP, ROW_FPS, ROW_VIBRATION, ROW_GRAPHICS, ROW_RESOLUTION, ROW_ASPECT, ROW_MOVIES, ROW_SCREEN, ROW_PADMAP,
        ROW_INSTALLED, ROW_LAUNCH, ROW_EXIT, ROW_COUNT };
 static int settings_page_count(void) { return ROW_COUNT; }
 
@@ -859,6 +859,7 @@ static void draw_settings_page(SDL_Renderer *ren) {
     if (row_shown(r)) draw_row(ren, label, value, y + row_slot(r) * step + (gap), selection == (r), n, h)
     ROW(ROW_FRAME_CAP, "FRAME CAP", frame_cap_label(g_settings.frame_cap), 0, normal, hot);
     ROW(ROW_FPS, "FPS COUNTER", g_settings.fps_counter ? "ON" : "OFF", 0, normal, hot);
+    ROW(ROW_VIBRATION, "VIBRATION", g_settings.vibration ? "ON" : "OFF", 0, normal, hot);
     ROW(ROW_GRAPHICS, "GRAPHICS", vulkan_available() ? nfs5_graphics_name(g_settings.graphics) : "GLES (NO VULKAN)", 0, normal, hot);
     ROW(ROW_RESOLUTION, "RESOLUTION", nfs5_resolution_name(g_settings.resolution), 0, normal, hot);
     ROW(ROW_ASPECT, "ASPECT", nfs5_aspect_name(g_settings.aspect), 0, normal, hot);
@@ -941,6 +942,7 @@ static void change_setting(int dir) {
             else g_settings.frame_cap = g_settings.frame_cap == 60 ? 0 : g_settings.frame_cap == 0 ? 30 : 60;
             break;
         case ROW_FPS: g_settings.fps_counter = !g_settings.fps_counter; break;
+        case ROW_VIBRATION: g_settings.vibration = !g_settings.vibration; break;
         case ROW_GRAPHICS:      /* Vulkan only where the firmware has a driver for it */
             if (vulkan_available()) g_settings.graphics = g_settings.graphics == NFS5_GFX_VULKAN ? NFS5_GFX_GLES : NFS5_GFX_VULKAN;
             break;

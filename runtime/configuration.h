@@ -3,6 +3,7 @@
  * File format: <root>/config/launcher.cfg, one key=value per line, '#' comments.
  *   frame_cap=30|60|0     (0 = uncapped)
  *   fps_counter=0|1
+ *   vibration=0|1         (pad rumble; 0 = off, default)
  *   detail=low|medium|high
  *   aspect=4:3|stretch
  *
@@ -47,6 +48,7 @@ typedef struct {
     int aspect;      /* NFS5_ASPECT_* */
     char screen[16]; /* "" = the firmware's default, else a display connector (e.g. "DSI-1") */
     int graphics;    /* NFS5_GFX_*: the engine's graphics API */
+    int vibration;   /* 0/1: the pad's rumble in races (off by default) */
 } Nfs5Settings;
 
 #define NFS5_GFX_GLES 0     /* OpenGL ES 3 (default; every firmware) */

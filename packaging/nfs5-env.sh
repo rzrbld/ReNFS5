@@ -37,6 +37,12 @@ v=$(nfs5_setting fps_counter)
 case "$v" in
     0|1) export NFS5_FPS_OVERLAY=${NFS5_FPS_OVERLAY:-$v} ;;
 esac
+# VIBRATION: the pad's rumble in races, off unless the launcher turned it on
+v=$(nfs5_setting vibration)
+case "$v" in
+    1|on) export NFS5_RUMBLE=${NFS5_RUMBLE:-1} ;;
+    *) export NFS5_RUMBLE=${NFS5_RUMBLE:-0} ;;
+esac
 # Always fullscreen on a handheld, also under a compositor (Weston etc.).
 export NFS5_FULLSCREEN=${NFS5_FULLSCREEN:-1}
 # Under a compositor the game window can lose keyboard focus (paused menu,
