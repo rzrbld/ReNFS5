@@ -12,7 +12,8 @@ game links no GPU or audio library of its own.
 
 ## Quick start
 
-1. Extract `nfs5.zip` into your device's **ports** directory.
+1. From `nfs5.zip`, copy **`NFS5.sh`** and the **`nfs5`** folder into your device's **ports**
+   directory (the other files in the ZIP are PortMaster metadata).
 2. Put your own installed game folder, or a ZIP of it, into `nfs5/source/`. It must contain
    `FEData/` and `GameData/` (the installed game also has `Porsche.exe`, whose tables the intro
    movies use, and `SaveData/`, whose players are carried over).
@@ -26,8 +27,17 @@ Allow at least **1.5 GiB free** for the import. CD images (`.iso`, `.bin` + `.cu
 Launcher settings: frame cap, FPS counter, **vibration** (pad rumble, off by default), **graphics** (GLES, or Vulkan where the firmware has a
 Vulkan driver, e.g. Panfrost), movies, game screen (dual-screen handhelds).
 
+For the smoothest races at high graphics settings set **FRAME CAP** to **30**. The GPU work runs
+on its own thread (`NFS_RENDER_THREAD=0` in `nfs5/nfs5-env.sh` turns that off).
+
 Requires AArch64 firmware with glibc 2.30+, SDL2 2.0.12+ and an OpenGL ES 3.0 driver that SDL2
 can load.
+
+## LAN multiplayer
+
+**Multiplayer → LAN games**: the host chooses **create...**, the others **join** the game from the
+list and press **ready**, and the host presses **RACE**. Discovery uses UDP broadcast on port
+9442: all players must be on the same subnet with broadcasts allowed.
 
 ## Controls
 

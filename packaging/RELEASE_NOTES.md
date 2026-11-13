@@ -1,7 +1,12 @@
 ReNFS5: Open Unleashed, for ARM64 PortMaster handhelds, on the **[Open-Unleashed](https://github.com/Second-Boot/Open-Unleashed)** engine by **Second-Boot** — thanks to them. Supply your own installed copy of the game.
 
-- **Vibration off by default**: the pad's rumble in races is now a launcher setting, **VIBRATION** (OFF / ON), off unless you turn it on.
-- Includes the previous releases: render thread on by default (Farmland 42 → 53 FPS, Alps 39 → 47 FPS on the RG40XX-H), no stutter at the first contact with opponents, mesh streaming, shader cache and even frame pacing (**FRAME CAP 30** gives perfectly even frames at high settings).
+**LAN multiplayer fixes** (tested between an RG40XX-H and a PC running the engine):
+- **The host can start the race**: in the host's lobby the **RACE** button stayed disabled, so no LAN race could start from the menus. The engine let the menu-layer cover disable the bottom bar's buttons; in the original game it does not (the bar decides BACK and OPTIONS by the layers itself).
+- **Each player's own picture**: the LAN loading screen and the race leader picture showed the game's default face for everyone. Each player now sends its profile's picture, built exactly as the original game writes it (`SaveData\pic16.fsh`, byte-identical).
+- **Pointer over dialogs**: on dialog boxes (exit, disconnect, game name, …) the mouse pointer was drawn under the box; it is now drawn on top.
+- Includes the previous releases: vibration off by default (launcher **VIBRATION**), render thread, smooth collisions, mesh streaming, shader cache and even frame pacing.
+
+How to play LAN: **Multiplayer → LAN games**, the host **create...**, the others **join** and **ready**, the host **RACE**. Players must be on the same subnet (UDP broadcast on port 9442).
 
 Install or upgrade:
 1. Download `nfs5.zip` and its SHA-256 file.

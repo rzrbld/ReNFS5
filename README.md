@@ -5,10 +5,12 @@ ReNFS5 is an unofficial community ARM64 Linux port of **Need for Speed: Porsche 
 **[Open-Unleashed](https://github.com/Second-Boot/Open-Unleashed)**, the open-source
 reimplementation of the game by **Second-Boot**, with the ReNFS5 handheld layer on top:
 
-- a native **OpenGL ES 3** renderer (about 60 FPS in races on the Allwinner H700),
+- a native **OpenGL ES 3** renderer with a render thread (on the Allwinner H700 about 50 FPS in
+  a full race at the game's default graphics settings, 60 in lighter scenes),
 - an SDL2 platform layer: window, GLES / Vulkan, audio and controllers all through the
   firmware's SDL2 — the game links no GPU or audio library of its own,
 - handheld controls through gptokeyb2 (pad pointer, d-pad menus, name entry by pad),
+- LAN multiplayer between handhelds and PCs running the engine,
 - a native launcher that imports and verifies your own game files and offers settings.
 
 The engine with these changes is the [`engine/`](https://github.com/rzrbld/Open-Unleashed/tree/renfs5-h700)
@@ -23,14 +25,25 @@ a fork of Second-Boot's repository.
    `FEData/` and `GameData/`; `Porsche.exe` is used for the intro movies when present. CD
    images (`.iso`, `.bin` + `.cue`, `.mdf` + `.mds`) work when they contain an installed game.
 4. Launch **NFS5**. The launcher imports the files once (allow about 1.5 GiB free), then opens
-   its settings: frame cap, FPS counter, graphics (GLES, or Vulkan where the firmware has a
-   Vulkan driver), movies, game screen. Select **SAVE & LAUNCH**.
+   its settings: frame cap, FPS counter, vibration (off by default), graphics (GLES, or Vulkan
+   where the firmware has a Vulkan driver), movies, game screen. Select **SAVE & LAUNCH**.
+
+For the smoothest races at high graphics settings set **FRAME CAP** to **30**: every frame then
+lasts exactly two screen refreshes. Uncapped is faster on average but less even.
 
 On muOS, copy `NFS5.sh` into `Roms/PORTS` if that is where your menu looks for shortcuts.
 Requires AArch64 firmware with glibc 2.30+, SDL2 and an OpenGL ES 3.0 driver SDL2 can load.
 Tested on muOS (RG40XX-H, H700, Mali-G31).
 
 Controls are in [`packaging/README.md`](packaging/README.md). In the game, **Start + Select** quits.
+
+## LAN multiplayer
+
+In the game, **Multiplayer → LAN games**: one player chooses **create...** and confirms the game
+name, the others select the game in the list, **join** and press **ready**; the host then
+presses **RACE**. Games are found by UDP broadcast on port **9442**, so every machine must be on
+the same subnet with broadcasts allowed (some guest or client-isolated Wi-Fi networks block them).
+Tested between an RG40XX-H and a Linux PC running the engine.
 
 ## Saves and settings
 
@@ -40,8 +53,8 @@ Saves are in `nfs5/saves/`, settings in `nfs5/configs/`; keep both when updating
 ## Build
 
 Every push is built by GitHub Actions ([`.github/workflows/build.yml`](.github/workflows/build.yml));
-a `portmaster-v*` tag publishes the package on the Releases page. Locally, with Docker, Python 3
-and Rust (`cargo`, for the licence list):
+a `portmaster-v*` tag publishes the package on the Releases page. Locally, on Linux with Docker,
+Python 3, Rust (`cargo`, for the licence list), `zip` and `file`:
 
 ```sh
 git clone --recurse-submodules https://github.com/rzrbld/ReNFS5.git
